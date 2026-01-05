@@ -478,65 +478,67 @@ export function Dashboard() {
                                     )}
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-x-12 gap-y-4 text-xs border-t pt-4">
+                            <div className="grid grid-cols-2 gap-4 text-xs border-t pt-4">
                                 <div className="space-y-1">
-                                    <p className="text-muted-foreground font-medium uppercase tracking-tight text-[10px]">Ağ Gecikmesi</p>
+                                    <p className="text-muted-foreground">Ağ Gecikmesi (Ping)</p>
                                     <div className="flex items-center gap-2">
                                         <div className={`h-2 w-2 rounded-full ${ping ? (ping < 100 ? 'bg-green-500' : 'bg-yellow-500') : 'bg-gray-500'}`} />
-                                        <span className="font-mono text-sm font-bold tracking-tight">{ping ? `${ping}ms` : '-'}</span>
+                                        <span className="font-mono">{ping ? `${ping}ms` : '-'}</span>
                                     </div>
                                 </div>
                                 <div className="space-y-1">
-                                    <p className="text-muted-foreground font-medium uppercase tracking-tight text-[10px]">Veri İndirme</p>
-                                    <span className="font-mono text-sm font-bold tracking-tight">{formatBytes(networkStats.received)}</span>
+                                    <p className="text-muted-foreground">Veri İndirme</p>
+                                    <span className="font-mono">{formatBytes(networkStats.received)}</span>
                                 </div>
                                 <div className="space-y-1">
-                                    <p className="text-muted-foreground font-medium uppercase tracking-tight text-[10px]">IP (Yerel)</p>
-                                    <span className="font-mono text-sm font-bold tracking-tight">{settings.privacyMode ? '192.168.x.x' : ipInfo.local}</span>
+                                    <p className="text-muted-foreground">IP (Yerel)</p>
+                                    <span className="font-mono">{settings.privacyMode ? '192.168.x.x' : ipInfo.local}</span>
                                 </div>
                                 <div className="space-y-1">
-                                    <p className="text-muted-foreground font-medium uppercase tracking-tight text-[10px]">IP (Dış)</p>
-                                    <span className="font-mono text-sm font-bold tracking-tight">{settings.privacyMode ? '***.***.***.***' : ipInfo.public}</span>
+                                    <p className="text-muted-foreground">IP (Dış)</p>
+                                    <span className="font-mono">{settings.privacyMode ? '***.***.***.***' : ipInfo.public}</span>
                                 </div>
                             </div>
 
-                            <div className="border-t pt-4 mt-4">
-                                <div className="flex items-end justify-between">
-                                    <div className="flex-1 grid grid-cols-2 gap-x-12">
-                                        <div className="space-y-1">
-                                            <p className="text-[10px] text-muted-foreground uppercase tracking-tight font-medium">İndirme</p>
-                                            <div className="flex items-baseline gap-1">
-                                                <span className="text-2xl font-mono font-bold tracking-tighter leading-none">
-                                                    {speedTestResult.download > 0 ? speedTestResult.download : '0.00'}
-                                                </span>
-                                                <span className="text-[10px] text-muted-foreground font-bold italic">Mbps</span>
-                                            </div>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <p className="text-[10px] text-muted-foreground uppercase tracking-tight font-medium">Yükleme</p>
-                                            <div className="flex items-baseline gap-1">
-                                                <span className="text-2xl font-mono font-bold tracking-tighter leading-none">
-                                                    {speedTestResult.upload > 0 ? speedTestResult.upload : '0.00'}
-                                                </span>
-                                                <span className="text-[10px] text-muted-foreground font-bold italic">Mbps</span>
-                                            </div>
-                                        </div>
-                                    </div>
+                            <div className="border-t pt-4 mt-4 space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">İnternet Hızı</p>
                                     <Button
                                         variant="outline"
                                         size="sm"
                                         onClick={runSpeedTest}
                                         disabled={speedTestResult.isTesting || status !== 'connected'}
                                         title="Hız Testi Başlat"
-                                        className="h-10 px-6 border-2 hover:bg-yellow-500/10 hover:border-yellow-500/50 transition-all duration-300"
+                                        className="h-8 px-3"
                                     >
                                         {speedTestResult.isTesting ? (
-                                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                            <Loader2 className="h-3 w-3 animate-spin mr-2" />
                                         ) : (
-                                            <Zap className="h-4 w-4 mr-2 text-yellow-500 fill-yellow-500" />
+                                            <Zap className="h-3 w-3 mr-2 text-yellow-500 fill-yellow-500" />
                                         )}
-                                        {speedTestResult.isTesting ? 'Analiz Ediliyor...' : 'Testi Başlat'}
+                                        {speedTestResult.isTesting ? 'Test Ediliyor...' : 'Testi Başlat'}
                                     </Button>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <p className="text-[10px] text-muted-foreground uppercase tracking-tight">İndirme</p>
+                                        <div className="flex items-baseline gap-1">
+                                            <span className="text-xl font-mono font-bold tracking-tight">
+                                                {speedTestResult.download > 0 ? speedTestResult.download : '0.00'}
+                                            </span>
+                                            <span className="text-[10px] text-muted-foreground font-medium">Mbps</span>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="text-[10px] text-muted-foreground uppercase tracking-tight">Yükleme</p>
+                                        <div className="flex items-baseline gap-1">
+                                            <span className="text-xl font-mono font-bold tracking-tight">
+                                                {speedTestResult.upload > 0 ? speedTestResult.upload : '0.00'}
+                                            </span>
+                                            <span className="text-[10px] text-muted-foreground font-medium">Mbps</span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </CardContent>
