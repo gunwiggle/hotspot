@@ -49,6 +49,7 @@ interface HotspotState {
     fetchPublicIp: () => Promise<void>
     runSpeedTest: () => Promise<void>
     checkForUpdates: (silent?: boolean) => Promise<void>
+    installUpdate: () => Promise<void>
 }
 
 export const useHotspotStore = create<HotspotState>((set, get) => ({
@@ -330,39 +331,72 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
         }
     },
 
-    // 20. Güncelleme Kontrolü (GitHub API)
     checkForUpdates: async (silent = false) => {
         set((state) => ({ updateInfo: { ...state.updateInfo, status: 'checking' } }))
 
         try {
-            const res = await fetch('https://api.github.com/repos/gunwi/hotspot/releases/latest', {
-                headers: { 'Accept': 'application/vnd.github.v3+json' }
-            })
+            // First try official Tauri Updater plugin (Tauri 2 compatible)
+            const { check } = await import('@tauri-apps/plugin-updater');
+            const update = await check();
 
-            if (!res.ok) throw new Error('GitHub API error')
-
-            const data = await res.json()
-            const latestVersion = data.tag_name.replace('v', '')
-            const currentVersion = '0.2.0'
-
-            if (latestVersion !== currentVersion) {
+            if (update) {
                 set({
                     updateInfo: {
                         status: 'available',
-                        latestVersion,
-                        releaseNotes: data.body,
-                        downloadUrl: data.html_url
+                        latestVersion: update.version,
+                        releaseNotes: update.body || 'Performans iyileştirmeleri ve hata düzeltmeleri içerir.',
+                        downloadUrl: 'https://github.com/gunwiggle/hotspot/releases/latest'
                     }
-                })
+                });
             } else {
-                set((state) => ({ updateInfo: { ...state.updateInfo, status: 'up-to-date' } }))
+                set((state) => ({ updateInfo: { ...state.updateInfo, status: 'up-to-date' } }));
                 if (!silent) {
-                    setTimeout(() => set((state) => ({ updateInfo: { ...state.updateInfo, status: 'idle' } })), 3000)
+                    setTimeout(() => set((state) => ({ updateInfo: { ...state.updateInfo, status: 'idle' } })), 3000);
                 }
             }
         } catch (e) {
-            console.error('Update check failed', e)
-            set((state) => ({ updateInfo: { ...state.updateInfo, status: 'idle' } }))
+            console.error('Updater plugin failed, falling back to manual API check', e);
+            // Fallback to manual GitHub API check
+            try {
+                const res = await fetch('https://api.github.com/repos/gunwiggle/hotspot/releases/latest', {
+                    headers: { 'Accept': 'application/vnd.github.v3+json' }
+                });
+                if (!res.ok) throw new Error('GitHub API error');
+                const data = await res.json();
+                const latestVersion = data.tag_name.replace('v', '');
+                const currentVersion = '0.2.0';
+
+                if (latestVersion !== currentVersion) {
+                    set({
+                        updateInfo: {
+                            status: 'available',
+                            latestVersion,
+                            releaseNotes: data.body,
+                            downloadUrl: data.html_url
+                        }
+                    });
+                } else {
+                    set((state) => ({ updateInfo: { ...state.updateInfo, status: 'up-to-date' } }));
+                }
+            } catch (apiError) {
+                set((state) => ({ updateInfo: { ...state.updateInfo, status: 'idle' } }));
+            }
+        }
+    },
+
+    installUpdate: async () => {
+        try {
+            const { check } = await import('@tauri-apps/plugin-updater');
+            const update = await check();
+            if (update) {
+                set((state) => ({ updateInfo: { ...state.updateInfo, status: 'checking' } }));
+                await update.downloadAndInstall();
+                // app will restart automatically
+            }
+        } catch (error) {
+            console.error('Update installation failed:', error);
+            alert('Güncelleme yüklenirken bir hata oluştu. Lütfen GitHub üzerinden manuel indirmeyi deneyin.');
+            set((state) => ({ updateInfo: { ...state.updateInfo, status: 'available' } }));
         }
     }
 }))

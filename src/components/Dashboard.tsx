@@ -96,7 +96,8 @@ export function Dashboard() {
         speedTestResult,
         runSpeedTest,
         updateInfo,
-        checkForUpdates
+        checkForUpdates,
+        installUpdate
     } = useHotspotStore()
 
     const formatBytes = (bytes: number) => {
@@ -288,11 +289,21 @@ export function Dashboard() {
                                         {updateInfo.releaseNotes || 'Sürüm notu bulunamadı.'}
                                     </div>
                                     <Button
-                                        className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold"
                                         size="sm"
-                                        onClick={() => window.open(updateInfo.downloadUrl!, '_blank')}
+                                        onClick={() => {
+                                            if (confirm('Uygulama indirilecek ve otomatik olarak yeniden başlatılacak. Devam edilsin mi?')) {
+                                                useHotspotStore.getState().installUpdate();
+                                            }
+                                        }}
+                                        disabled={updateInfo.status === 'checking'}
                                     >
-                                        GitHub'dan İndir
+                                        {updateInfo.status === 'checking' ? (
+                                            <>
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                Yükleniyor...
+                                            </>
+                                        ) : 'Şimdi Güncelle ve Yeniden Başlat'}
                                     </Button>
                                 </div>
                             )}

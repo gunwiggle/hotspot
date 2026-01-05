@@ -35,5 +35,13 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "DWY+your+public+key+here",
+      "endpoints": [
+        "https://github.com/gunwiggle/hotspot/releases/latest/download/updater.json"
+      ]
+    }
   }
 }
