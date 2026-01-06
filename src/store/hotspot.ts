@@ -364,7 +364,7 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
                 if (!res.ok) throw new Error('GitHub API error');
                 const data = await res.json();
                 const latestVersion = data.tag_name.replace('v', '');
-                const currentVersion = '0.2.0';
+                const currentVersion = '0.2.1';
 
                 if (latestVersion !== currentVersion) {
                     set({
