@@ -329,38 +329,88 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
         set({ speedTestResult: { download: 0, upload: 0, isTesting: true } })
 
         try {
-            // STEP 1: DOWNLOAD TEST (Cloudflare ~2MB)
-            const dStart = Date.now()
-            const dRes = await fetch('https://speed.cloudflare.com/__down?bytes=2000000', { cache: 'no-store' })
-            const dData = await dRes.blob()
-            const dEnd = Date.now()
+            // STEP 1: REAL-TIME DOWNLOAD TEST (Cloudflare ~10MB to give time for ramp-up)
+            // Using a larger file to allow speed to stabilize
+            const downloadUrl = 'https://speed.cloudflare.com/__down?bytes=10000000';
+            const dStart = Date.now();
+            let loadedBytes = 0;
 
-            const dSec = (dEnd - dStart) / 1000
-            const dMbps = (dData.size * 8) / (dSec * 1000000)
+            const response = await fetch(downloadUrl);
+            const reader = response.body?.getReader();
 
-            set((state) => ({ speedTestResult: { ...state.speedTestResult, download: parseFloat(dMbps.toFixed(2)) } }))
+            if (reader) {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
 
-            // STEP 2: UPLOAD TEST (Simulated POST ~1MB)
-            const uStart = Date.now()
-            const uPayload = new Uint8Array(1000000) // 1MB random data
+                    loadedBytes += value.length;
+                    const currentTime = Date.now();
+                    const durationInSec = (currentTime - dStart) / 1000;
 
-            // Note: In a real app, use a proper upload endpoint. 
-            // Using httpbin for demonstration
-            await fetch('https://httpbin.org/post', {
-                method: 'POST',
-                body: uPayload,
-                cache: 'no-store',
-                mode: 'cors'
-            })
-            const uEnd = Date.now()
+                    // Prevent division by zero and extremely high spikes at start
+                    if (durationInSec > 0.1) {
+                        const currentBps = (loadedBytes * 8) / durationInSec;
+                        const currentMbps = currentBps / 1000000;
 
-            const uSec = (uEnd - uStart) / 1000
-            const uMbps = (uPayload.length * 8) / (uSec * 1000000)
+                        // Update UI seamlessly
+                        set((state) => ({
+                            speedTestResult: {
+                                ...state.speedTestResult,
+                                download: parseFloat(currentMbps.toFixed(2))
+                            }
+                        }));
+                    }
+                }
+            }
 
-            set((state) => ({ speedTestResult: { ...state.speedTestResult, upload: parseFloat(uMbps.toFixed(2)), isTesting: false } }))
+            // Final Download Fixup
+            const dEnd = Date.now();
+            const dSec = (dEnd - dStart) / 1000;
+            const finalDMbps = (loadedBytes * 8) / (dSec * 1000000);
+            set((state) => ({
+                speedTestResult: { ...state.speedTestResult, download: parseFloat(finalDMbps.toFixed(2)) }
+            }));
+
+
+            // STEP 2: REAL-TIME UPLOAD TEST (XHR for Progress Events)
+            await new Promise<void>((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                const uStart = Date.now();
+                // 2MB random payload
+                const uPayload = new Uint8Array(2 * 1024 * 1024);
+
+                xhr.upload.onprogress = (event) => {
+                    if (event.lengthComputable) {
+                        const currentTime = Date.now();
+                        const durationInSec = (currentTime - uStart) / 1000;
+
+                        if (durationInSec > 0.1) {
+                            const currentBps = (event.loaded * 8) / durationInSec;
+                            const currentMbps = currentBps / 1000000;
+
+                            set((state) => ({
+                                speedTestResult: {
+                                    ...state.speedTestResult,
+                                    upload: parseFloat(currentMbps.toFixed(2))
+                                }
+                            }));
+                        }
+                    }
+                };
+
+                xhr.onload = () => resolve();
+                xhr.onerror = () => reject(new Error('Upload test failed'));
+
+                // Cloudflare upload endpoint
+                xhr.open('POST', 'https://speed.cloudflare.com/__up');
+                xhr.send(uPayload);
+            });
+
+            set((state) => ({ speedTestResult: { ...state.speedTestResult, isTesting: false } }));
+
         } catch (e) {
             console.error('Speed test failed', e)
-            set({ speedTestResult: { download: -1, upload: -1, isTesting: false } })
+            set({ speedTestResult: { download: 0, upload: 0, isTesting: false } })
         }
     },
 

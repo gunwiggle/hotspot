@@ -1,7 +1,6 @@
 import { useEffect } from "react";
-import { Dashboard } from "./components/Dashboard";
-import { CustomTitlebar } from "./components/CustomTitlebar";
-import { UpdateModal } from "./components/UpdateModal";
+import { CustomTitlebar } from "@/components/CustomTitlebar";
+import { Dashboard } from "@/components/Dashboard";
 import { useHotspotStore } from "./store/hotspot";
 
 function App() {
@@ -18,9 +17,7 @@ function App() {
       <CustomTitlebar />
       <div className="flex-1 overflow-y-auto p-1">
         <Dashboard />
-
       </div>
-      <UpdateModal />
     </div>
   )
 }
