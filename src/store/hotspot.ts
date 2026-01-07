@@ -420,13 +420,18 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
                 let releaseNotes = update.body || 'Performans iyileştirmeleri ve hata düzeltmeleri içerir.';
 
                 try {
-                    const res = await fetch(`https://api.github.com/repos/gunwiggle/hotspot/releases/tags/v${update.version}`);
+                    const res = await fetch(`https://api.github.com/repos/gunwiggle/hotspot/releases/tags/v${update.version}`, {
+                        headers: {
+                            'Authorization': `Bearer ${GITHUB_TOKEN}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        }
+                    });
                     if (res.ok) {
                         const data = await res.json();
                         if (data.body) releaseNotes = data.body;
                     }
                 } catch (e) {
-                    // console.error('Failed to fetch GH release notes', e);
+                    console.error('Failed to fetch GH release notes', e);
                 }
 
                 // Eger otomatik kontrol ise (internet baglandiginda), KULLANICIYA SORMADAN indir
@@ -568,17 +573,48 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
     },
 
     restartApp: async () => {
-        if (pendingUpdate) {
-            try {
+        try {
+            // If update object is missing (e.g. after app restart), try to find it again
+            if (!pendingUpdate) {
+                console.log('Update object lost, re-checking...');
+                const { check } = await import('@tauri-apps/plugin-updater');
+                const { invoke } = await import('@tauri-apps/api/core');
+
+                try {
+                    const GITHUB_TOKEN = await invoke<string>('get_github_token');
+                    const update = await check({
+                        headers: {
+                            'Authorization': `Bearer ${GITHUB_TOKEN}`,
+                            'Accept': 'application/octet-stream'
+                        }
+                    });
+
+                    if (update) {
+                        pendingUpdate = update;
+                        // If cached, download might be needed again to get the handle, but usually fast
+                        // Ideally we should just verify signature but plugin logic requires download call to prep install?
+                        // Let's assume install() handles it or re-download is fast.
+                        await update.downloadAndInstall();
+                        return; // install() should handle restart/exit
+                    }
+                } catch (err) {
+                    console.error('Failed to re-acquire update object', err);
+                }
+            }
+
+            if (pendingUpdate) {
                 await pendingUpdate.install();
                 return;
-            } catch (e) {
-                console.error('Update install failed, falling back to relaunch', e);
             }
-        }
 
-        const { relaunch } = await import('@tauri-apps/plugin-process');
-        await relaunch();
+            // Fallback
+            const { relaunch } = await import('@tauri-apps/plugin-process');
+            await relaunch();
+        } catch (e) {
+            console.error('Update install failed, falling back to relaunch', e);
+            const { relaunch } = await import('@tauri-apps/plugin-process');
+            await relaunch();
+        }
     },
 
     skipVersion: (version: string) => {
@@ -603,25 +639,32 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
         }
     },
 
-    loadPendingUpdate: () => {
+    loadPendingUpdate: async () => {
         const pendingVersion = localStorage.getItem('hotspot_pending_update');
         if (pendingVersion) {
-            const currentVersion = '0.2.4'; // TODO: Get from Tauri
+            try {
+                const { getVersion } = await import('@tauri-apps/api/app');
+                const currentVersion = await getVersion();
 
-            // Only restore if pending version is different from current
-            if (pendingVersion !== currentVersion) {
-                console.log(`Restoring pending update: ${pendingVersion}`);
-                set((state) => ({
-                    updateInfo: {
-                        ...state.updateInfo,
-                        pendingUpdateVersion: pendingVersion,
-                        restartPending: true,
-                        latestVersion: pendingVersion
-                    }
-                }));
-            } else {
-                // Already updated, clear the pending flag
-                localStorage.removeItem('hotspot_pending_update');
+                // Only restore if pending version is different from current
+                if (pendingVersion !== currentVersion) {
+                    console.log(`Restoring pending update: ${pendingVersion}`);
+                    set((state) => ({
+                        updateInfo: {
+                            ...state.updateInfo,
+                            pendingUpdateVersion: pendingVersion,
+                            restartPending: true,
+                            latestVersion: pendingVersion,
+                            checkInProgress: false,
+                            status: 'available' // Ensure UI shows it
+                        }
+                    }));
+                } else {
+                    // Already updated, clear the pending flag
+                    localStorage.removeItem('hotspot_pending_update');
+                }
+            } catch (e) {
+                console.error('Failed to load version info', e);
             }
         }
     },
