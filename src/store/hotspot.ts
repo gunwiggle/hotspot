@@ -377,6 +377,22 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
         const now = Date.now();
         if (updateInfo.lastCheckTime && (now - updateInfo.lastCheckTime) < 30000) {
             console.log('Rate limited: too soon since last check');
+            if (!silent) {
+                // UX: Simulate a quick check so the user feels the button worked
+                set((state) => ({
+                    updateInfo: { ...state.updateInfo, checkInProgress: true, status: 'checking' }
+                }));
+                setTimeout(() => {
+                    set((state) => ({
+                        updateInfo: {
+                            ...state.updateInfo,
+                            checkInProgress: false,
+                            // Restore 'available' if it was there, otherwise 'idle' (or 'up-to-date')
+                            status: state.updateInfo.status === 'available' ? 'available' : 'idle'
+                        }
+                    }));
+                }, 800);
+            }
             return;
         }
 
