@@ -1,0 +1,70 @@
+name: Update Gist on Publish
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  update-gist:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Update Gist with New Release
+        env:
+          GIST_ID: '2348ea7e6032a18ae38ffacc693f818b'
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+        run: |
+          # 1. Get Release Data
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"
+          
+          # 2. Construct Download URL
+          # Since the release is just published, the assets should be available at the standard GitHub release URL.
+          # We don't need to read the .sig file content if we trust the build process, 
+          # BUT the update manifest requires the signature content itself, NOT a url to it.
+          # So we MUST download the .sig file.
+          
+          echo "Fetching signature for v$VERSION..."
+          SIG_URL="https://github.com/${{ github.repository }}/releases/download/v$VERSION/Hotspot.Manager_${VERSION}_x64-setup.exe.sig"
+          
+          # Download signature with retry
+          SIGNATURE=$(curl -sL --retry 3 "$SIG_URL")
+          
+          if [ -z "$SIGNATURE" ]; then
+            echo "Error: Failed to fetch signature from $SIG_URL"
+            exit 1
+          fi
+          
+          echo "Signature fetched successfully."
+          
+          # 3. Construct JSON
+          JSON_CONTENT=$(cat <<EOF
+          {
+            "version": "$VERSION",
+            "pub_date": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "platforms": {
+              "windows-x86_64": {
+                "signature": "$SIGNATURE",
+                "url": "https://github.com/${{ github.repository }}/releases/download/v$VERSION/Hotspot.Manager_${VERSION}_x64-setup.exe"
+              }
+            }
+          }
+          EOF
+          )
+          
+          # 4. Update Gist
+          # We need to escape the JSON string for the payload
+          # Using python for safe escaping
+          ESCAPED_CONTENT=$(python3 -c "import json; print(json.dumps('''$JSON_CONTENT'''))")
+          
+          PAYLOAD="{\"files\": {\"updater.json\": {\"content\": $ESCAPED_CONTENT}}}"
+          
+          curl -L \
+            -X PATCH \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GIST_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/gists/$GIST_ID \
+            -d "$PAYLOAD"
+            
+          echo "✅ Gist updated successfully for v$VERSION"

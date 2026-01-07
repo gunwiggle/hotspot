@@ -482,6 +482,11 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
                     set((state) => ({ updateInfo: { ...state.updateInfo, checkInProgress: false } }));
                     return;
                 }
+                // Safety check: ensure version exists
+                if (!update.version) {
+                    console.error('Update object found but missing version', update);
+                    return;
+                }
 
                 let releaseNotes = update.body || 'Performans iyileştirmeleri ve hata düzeltmeleri içerir.';
 

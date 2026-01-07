@@ -52,6 +52,19 @@ jobs:
         run: |
           npm install
 
+      - name: Read Release Notes
+        id: read_release_notes
+        shell: bash
+        run: |
+          if [ -f RELEASE_NOTES.md ]; then
+            CONTENT=$(cat RELEASE_NOTES.md)
+            echo "RELEASE_BODY<<EOF" >> $GITHUB_ENV
+            echo "$CONTENT" >> $GITHUB_ENV
+            echo "EOF" >> $GITHUB_ENV
+          else
+            echo "RELEASE_BODY=See the assets to download this version and install." >> $GITHUB_ENV
+          fi
+
       - name: Build and Release
         id: tauri_build
         uses: tauri-apps/tauri-action@v0
@@ -62,70 +75,9 @@ jobs:
         with:
           tagName: ${{ github.event.inputs.version_tag || github.ref_name }}
           releaseName: 'Hotspot Manager ${{ github.event.inputs.version_tag || github.ref_name }}'
-          releaseBody: 'See the assets to download this version and install.'
+          releaseBody: ${{ env.RELEASE_BODY }}
           releaseDraft: true
           prerelease: false
 
-      - name: Get Signature and Update Gist
-        if: matrix.platform == 'windows-latest'
-        env:
-          GIST_ID: '2348ea7e6032a18ae38ffacc693f818b'
-          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
-        shell: bash
-        run: |
-          # Extract version
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ github.event.inputs.version_tag }}" ]; then
-            VERSION="${{ github.event.inputs.version_tag }}"
-          else
-            VERSION="${{ github.ref_name }}"
-          fi
-          
-          VERSION="${VERSION#v}"
-          
-          # Find the signature file
-          SIG_FILE=$(find src-tauri/target/release/bundle/nsis -name "*.sig" | head -n 1)
-          SIGNATURE=$(cat "$SIG_FILE")
-          
-          # Construct the JSON
-          # Note: We use the releases/download URL format
-          JSON_CONTENT=$(cat <<EOF
-          {
-            "version": "$VERSION",
-            "pub_date": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
-            "platforms": {
-              "windows-x86_64": {
-                "signature": "$SIGNATURE",
-                "url": "https://github.com/${{ github.repository }}/releases/download/v$VERSION/Hotspot.Manager_${VERSION}_x64-setup.exe"
-              }
-            }
-          }
-          EOF
-          )
-          
-          echo "Generated JSON:"
-          echo "$JSON_CONTENT"
-          
-          # Escape quotes for JSON payload because we are putting JSON inside JSON
-          # Using jq would be cleaner but let's stick to simple bash with python one-liner for escaping if needed, 
-          # or simply construct the payload carefully.
-          
-          # Let's use a temporary file for the content
-          echo "$JSON_CONTENT" > gist_content.json
-          
-          # Update the Gist using curl
-          curl -L \
-            -X PATCH \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $GIST_TOKEN" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            https://api.github.com/gists/$GIST_ID \
-            -d @- <<PAYLOAD
-          {
-            "description": "Hotspot Manager Update Manifest (Updated for $VERSION)",
-            "files": {
-              "updater.json": {
-                "content": $(jq -Rs . < gist_content.json)
-              }
-            }
-          }
-          PAYLOAD
+      # GIST UPDATE REMOVED/MOVED TO publish.yml
+      # This ensures the update is only seen by users AFTER the release is Published, not while in Draft.
