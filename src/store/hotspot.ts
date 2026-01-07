@@ -646,22 +646,41 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
                 const { getVersion } = await import('@tauri-apps/api/app');
                 const currentVersion = await getVersion();
 
-                // Only restore if pending version is different from current
-                if (pendingVersion !== currentVersion) {
-                    console.log(`Restoring pending update: ${pendingVersion}`);
+                // Simple version comparison helper
+                const compareVersions = (v1: string, v2: string) => {
+                    const parts1 = v1.split('.').map(Number);
+                    const parts2 = v2.split('.').map(Number);
+                    for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+                        const n1 = parts1[i] || 0;
+                        const n2 = parts2[i] || 0;
+                        if (n1 > n2) return 1;
+                        if (n1 < n2) return -1;
+                    }
+                    return 0;
+                };
+
+                // Only treat as pending if pendingVersion > currentVersion
+                if (compareVersions(pendingVersion, currentVersion) > 0) {
                     set((state) => ({
                         updateInfo: {
                             ...state.updateInfo,
-                            pendingUpdateVersion: pendingVersion,
-                            restartPending: true,
-                            latestVersion: pendingVersion,
-                            checkInProgress: false,
-                            status: 'available' // Ensure UI shows it
-                        }
+                            updateAvailable: true,
+                            version: pendingVersion,
+                            status: 'available'
+                        },
+                        restartPending: true
                     }));
                 } else {
-                    // Already updated, clear the pending flag
+                    // Pending version is same or older, clear it
                     localStorage.removeItem('hotspot_pending_update');
+                    set((state) => ({
+                        updateInfo: {
+                            ...state.updateInfo,
+                            updateAvailable: false,
+                            status: 'idle'
+                        },
+                        restartPending: false
+                    }));
                 }
             } catch (e) {
                 console.error('Failed to load version info', e);

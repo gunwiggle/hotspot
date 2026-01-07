@@ -19,7 +19,7 @@ function App() {
       <div className="flex-1 overflow-y-auto p-1">
         <Dashboard />
         <span className="absolute bottom-2 right-2 text-xs text-muted-foreground opacity-50 font-mono">
-          v0.2.8
+          v0.2.9
         </span>
       </div>
       <UpdateModal />
