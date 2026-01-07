@@ -18,6 +18,7 @@ function App() {
       <CustomTitlebar />
       <div className="flex-1 overflow-y-auto p-1">
         <Dashboard />
+        <div className="text-xs text-center text-gray-500 opacity-50 p-2">v0.2.7</div>
       </div>
       <UpdateModal />
     </div>
