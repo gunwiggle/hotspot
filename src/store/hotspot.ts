@@ -31,8 +31,15 @@ interface HotspotState {
         status: 'idle' | 'checking' | 'available' | 'up-to-date',
         latestVersion: string | null,
         releaseNotes: string | null,
-        downloadUrl: string | null
+        downloadUrl: string | null,
+        skippedVersion: string | null,
+        showModal: boolean,
+        downloadProgress: number,
+        isUpdating: boolean,
+        restartPending: boolean
     }
+    isSettingsOpen: boolean
+    setSettingsOpen: (isOpen: boolean) => void
     setCredentials: (credentials: Credentials) => void
     setSettings: (settings: Settings) => void
     setStatus: (status: ConnectionStatus) => void
@@ -48,8 +55,12 @@ interface HotspotState {
     performPingTest: () => Promise<void>
     fetchPublicIp: () => Promise<void>
     runSpeedTest: () => Promise<void>
-    checkForUpdates: (silent?: boolean) => Promise<void>
+    checkForUpdates: (silent?: boolean, isAutoCheck?: boolean) => Promise<void>
     installUpdate: () => Promise<void>
+    restartApp: () => Promise<void>
+    skipVersion: (version: string) => void
+    dismissUpdateModal: () => void
+    loadSkippedVersion: () => void
 }
 
 export const useHotspotStore = create<HotspotState>((set, get) => ({
@@ -73,11 +84,18 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
         status: 'idle',
         latestVersion: null,
         releaseNotes: null,
-        downloadUrl: null
+        downloadUrl: null,
+        skippedVersion: null,
+        showModal: false,
+        downloadProgress: 0,
+        isUpdating: false,
+        restartPending: false
     },
+    isSettingsOpen: false,
 
     setCredentials: (credentials) => set({ credentials }),
     setSettings: (settings) => set({ settings }),
+    setSettingsOpen: (isOpen) => set({ isSettingsOpen: isOpen }),
     setStatus: (status) => {
         set({ status })
 
@@ -331,25 +349,47 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
         }
     },
 
-    checkForUpdates: async (silent = false) => {
+    checkForUpdates: async (silent = false, isAutoCheck = false) => {
         set((state) => ({ updateInfo: { ...state.updateInfo, status: 'checking' } }))
 
         try {
-            // First try official Tauri Updater plugin (Tauri 2 compatible)
             const { check } = await import('@tauri-apps/plugin-updater');
             const update = await check();
 
             if (update) {
+                const { updateInfo } = get();
+                let releaseNotes = update.body || 'Performans iyileştirmeleri ve hata düzeltmeleri içerir.';
+
+                try {
+                    const res = await fetch(`https://api.github.com/repos/gunwiggle/hotspot/releases/tags/v${update.version}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.body) releaseNotes = data.body;
+                    }
+                } catch (e) {
+                    console.error('Failed to fetch GH release notes', e);
+                }
+
+                // Modal gosterim mantigi:
+                // 1. Eger otomatik kontrol ise (uygulama acilisi) VE versiyon atlanmamissa goster.
+                // 2. Eger manuel kontrol ise (isAutoCheck=false) VE ayarlar sayfasi acik degilse goster (ama manuel kontrolde genelde ayarlar aciktir).
+                // Kullanici istegi: "kontrol et'e tıkladığımda hala modal şeklinde açılıyor, bu şekilde değil de yenilikler kısmına gelmeli"
+                // Bu yuzden manuel kontrolde (isAutoCheck=false) modal ASLA acilmamali.
+
+                const shouldShowModal = isAutoCheck && updateInfo.skippedVersion !== update.version;
+
                 set({
                     updateInfo: {
+                        ...get().updateInfo,
                         status: 'available',
                         latestVersion: update.version,
-                        releaseNotes: update.body || 'Performans iyileştirmeleri ve hata düzeltmeleri içerir.',
-                        downloadUrl: 'https://github.com/gunwiggle/hotspot/releases/latest'
+                        releaseNotes: releaseNotes,
+                        downloadUrl: 'https://github.com/gunwiggle/hotspot/releases/latest',
+                        showModal: shouldShowModal
                     }
                 });
             } else {
-                set((state) => ({ updateInfo: { ...state.updateInfo, status: 'up-to-date' } }));
+                set((state) => ({ updateInfo: { ...state.updateInfo, status: 'up-to-date', showModal: false } }));
                 if (!silent) {
                     setTimeout(() => set((state) => ({ updateInfo: { ...state.updateInfo, status: 'idle' } })), 3000);
                 }
@@ -364,15 +404,20 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
                 if (!res.ok) throw new Error('GitHub API error');
                 const data = await res.json();
                 const latestVersion = data.tag_name.replace('v', '');
-                const currentVersion = '0.2.1';
+                // const currentVersion = '0.2.1'; // TODO: fetch from tauri app
 
-                if (latestVersion !== currentVersion) {
+                if (latestVersion) { // simple check
+                    const { updateInfo } = get();
+                    const shouldShowModal = isAutoCheck && updateInfo.skippedVersion !== latestVersion;
+
                     set({
                         updateInfo: {
+                            ...get().updateInfo,
                             status: 'available',
                             latestVersion,
                             releaseNotes: data.body,
-                            downloadUrl: data.html_url
+                            downloadUrl: data.html_url,
+                            showModal: shouldShowModal
                         }
                     });
                 } else {
@@ -385,18 +430,86 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
     },
 
     installUpdate: async () => {
+        const { updateInfo } = get();
+        // Prevent multiple clicks if already updating
+        if (updateInfo.isUpdating) return;
+
+        set((state) => ({ updateInfo: { ...state.updateInfo, isUpdating: true, downloadProgress: 0 } }));
+
         try {
             const { check } = await import('@tauri-apps/plugin-updater');
+
             const update = await check();
             if (update) {
-                set((state) => ({ updateInfo: { ...state.updateInfo, status: 'checking' } }));
-                await update.downloadAndInstall();
-                // app will restart automatically
+                let downloaded = 0;
+                let contentLength = 0;
+                await update.downloadAndInstall(async (event) => {
+                    switch (event.event) {
+                        case 'Started':
+                            contentLength = event.data.contentLength || 0;
+                            break;
+                        case 'Progress':
+                            downloaded += event.data.chunkLength;
+                            if (contentLength > 0) {
+                                const percent = Math.round((downloaded / contentLength) * 100);
+                                // Prevent going back from 100 immediately
+                                set((state) => ({ updateInfo: { ...state.updateInfo, downloadProgress: percent } }));
+                            }
+                            break;
+                        case 'Finished':
+                            set((state) => ({
+                                updateInfo: {
+                                    ...state.updateInfo,
+                                    downloadProgress: 100,
+                                    isUpdating: false,
+                                    restartPending: true
+                                }
+                            }));
+                            break;
+                    }
+                });
+
+                // Ensure state is updated even if 'Finished' event was missed
+                set((state) => ({
+                    updateInfo: {
+                        ...state.updateInfo,
+                        downloadProgress: 100,
+                        isUpdating: false,
+                        restartPending: true
+                    }
+                }));
             }
         } catch (error) {
             console.error('Update installation failed:', error);
-            alert('Güncelleme yüklenirken bir hata oluştu. Lütfen GitHub üzerinden manuel indirmeyi deneyin.');
-            set((state) => ({ updateInfo: { ...state.updateInfo, status: 'available' } }));
+            set((state) => ({ updateInfo: { ...state.updateInfo, isUpdating: false, status: 'available' } }));
+            throw error;
+        }
+    },
+
+    restartApp: async () => {
+        const { relaunch } = await import('@tauri-apps/plugin-process');
+        await relaunch();
+    },
+
+    skipVersion: (version: string) => {
+        localStorage.setItem('hotspot_skipped_version', version);
+        set((state) => ({
+            updateInfo: {
+                ...state.updateInfo,
+                skippedVersion: version,
+                showModal: false
+            }
+        }));
+    },
+
+    dismissUpdateModal: () => {
+        set((state) => ({ updateInfo: { ...state.updateInfo, showModal: false } }));
+    },
+
+    loadSkippedVersion: () => {
+        const skipped = localStorage.getItem('hotspot_skipped_version');
+        if (skipped) {
+            set((state) => ({ updateInfo: { ...state.updateInfo, skippedVersion: skipped } }));
         }
     }
 }))

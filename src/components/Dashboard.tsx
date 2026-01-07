@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { useHotspotStore, type ConnectionStatus } from '@/store/hotspot'
+import { getVersion } from '@tauri-apps/api/app'
 import { enable, disable, isEnabled } from '@tauri-apps/plugin-autostart'
 
 const StatusBadge = ({ status, isChecking }: { status: ConnectionStatus, isChecking: boolean }) => {
@@ -66,9 +67,9 @@ const StatusIndicator = ({ status, isChecking }: { status: ConnectionStatus, isC
 
 export function Dashboard() {
     const [showPassword, setShowPassword] = useState(false)
-    const [showSettings, setShowSettings] = useState(false)
     const [isLoggingOut, setIsLoggingOut] = useState(false)
     const [autoStart, setAutoStart] = useState(false)
+    const [appVersion, setAppVersion] = useState<string>('...')
     const hasCheckedRef = useRef(false)
     const {
         status,
@@ -97,7 +98,9 @@ export function Dashboard() {
         runSpeedTest,
         updateInfo,
         checkForUpdates,
-        installUpdate
+        installUpdate,
+        isSettingsOpen,
+        setSettingsOpen
     } = useHotspotStore()
 
     const formatBytes = (bytes: number) => {
@@ -139,6 +142,7 @@ export function Dashboard() {
     useEffect(() => {
         // Check auto-start status on mount
         isEnabled().then(setAutoStart).catch(console.error)
+        getVersion().then(setAppVersion).catch(console.error)
     }, [])
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -176,7 +180,7 @@ export function Dashboard() {
         }
     }
 
-    if (showSettings) {
+    if (isSettingsOpen) {
         return (
             <div className="min-h-screen bg-background p-6">
                 <div className="mx-auto max-w-2xl space-y-6">
@@ -185,7 +189,7 @@ export function Dashboard() {
                             <h1 className="text-2xl font-bold tracking-tight">Ayarlar</h1>
                             <p className="text-muted-foreground">Uygulama tercihlerinizi yönetin</p>
                         </div>
-                        <Button variant="outline" size="icon" onClick={() => setShowSettings(false)}>
+                        <Button variant="outline" size="icon" onClick={() => setSettingsOpen(false)}>
                             <X className="h-4 w-4" />
                         </Button>
                     </div>
@@ -258,59 +262,93 @@ export function Dashboard() {
 
                     <Card className="mt-4">
                         <CardHeader>
-                            <CardTitle>Uygulama Hakkında</CardTitle>
+                            <CardTitle className="flex items-center gap-2">
+                                Uygulama Hakkında
+                                {updateInfo.status === 'available' && !updateInfo.isUpdating && (
+                                    <Badge variant="secondary" className="bg-blue-500/10 text-blue-500 text-xs">
+                                        Güncelleme Mevcut
+                                    </Badge>
+                                )}
+                            </CardTitle>
                             <CardDescription>Versiyon ve güncellemeler</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="flex items-center justify-between">
                                 <div className="space-y-0.5">
-                                    <Label>Sürüm v0.2.0</Label>
+                                    <Label className={updateInfo.status === 'up-to-date' ? "text-green-600 font-bold" : ""}>
+                                        Sürüm v{appVersion} {updateInfo.status === 'up-to-date' ? ' (Güncel)' : ''}
+                                    </Label>
                                     <p className="text-sm text-muted-foreground">
                                         {updateInfo.status === 'up-to-date' ? 'En güncel sürümü kullanıyorsunuz' :
-                                            updateInfo.status === 'available' ? `Yeni sürüm mevcut: v${updateInfo.latestVersion}` :
-                                                'Güncellemeleri kontrol edin'}
+                                            updateInfo.status === 'available' && !updateInfo.isUpdating && !updateInfo.restartPending ? `Yeni sürüm mevcut: v${updateInfo.latestVersion}` :
+                                                updateInfo.isUpdating ? 'Güncelleme yükleniyor...' :
+                                                    updateInfo.restartPending ? 'Yeniden başlatma bekleniyor...' :
+                                                        'Güncellemeleri kontrol edin'}
                                     </p>
                                 </div>
                                 <Button
                                     variant="outline"
                                     size="sm"
                                     onClick={() => checkForUpdates()}
-                                    disabled={updateInfo.status === 'checking'}
+                                    disabled={updateInfo.status === 'checking' || updateInfo.isUpdating || updateInfo.restartPending}
                                 >
                                     {updateInfo.status === 'checking' ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
                                     <span className="ml-2">Kontrol Et</span>
                                 </Button>
                             </div>
 
-                            {updateInfo.status === 'available' && (
-                                <div className="rounded-md bg-blue-500/10 p-4 space-y-3">
-                                    <div className="text-sm font-medium text-blue-500">Yenilikler:</div>
-                                    <div className="text-xs text-muted-foreground whitespace-pre-wrap max-h-32 overflow-y-auto">
-                                        {updateInfo.releaseNotes || 'Sürüm notu bulunamadı.'}
-                                    </div>
-                                    <Button
-                                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold"
-                                        size="sm"
-                                        onClick={() => {
-                                            if (confirm('Uygulama indirilecek ve otomatik olarak yeniden başlatılacak. Devam edilsin mi?')) {
-                                                useHotspotStore.getState().installUpdate();
-                                            }
-                                        }}
-                                        disabled={updateInfo.status === 'checking'}
-                                    >
-                                        {updateInfo.status === 'checking' ? (
-                                            <>
-                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                Yükleniyor...
-                                            </>
-                                        ) : 'Şimdi Güncelle ve Yeniden Başlat'}
-                                    </Button>
+                            {(updateInfo.status === 'available' || updateInfo.isUpdating || updateInfo.restartPending) && (
+                                <div className="rounded-md bg-blue-500/10 p-4 space-y-3 border border-blue-500/20">
+                                    {!updateInfo.isUpdating && !updateInfo.restartPending && (
+                                        <>
+                                            <div className="text-sm font-medium text-blue-500">Yenilikler:</div>
+                                            <div className="text-xs text-muted-foreground whitespace-pre-wrap max-h-32 overflow-y-auto scrollbar-hide">
+                                                {updateInfo.releaseNotes || 'Sürüm notu bulunamadı.'}
+                                            </div>
+                                        </>
+                                    )}
+
+                                    {updateInfo.isUpdating ? (
+                                        <div className="space-y-2">
+                                            <div className="flex justify-between text-xs text-blue-600 dark:text-blue-400 font-medium">
+                                                <span>{updateInfo.downloadProgress >= 100 ? 'Kuruluyor...' : 'İndiriliyor...'}</span>
+                                                <span>%{updateInfo.downloadProgress}</span>
+                                            </div>
+                                            <div className="h-2 w-full bg-blue-200 dark:bg-blue-900 rounded-full overflow-hidden">
+                                                <div
+                                                    className="h-full bg-blue-600 dark:bg-blue-500 transition-all duration-300 ease-out"
+                                                    style={{ width: `${updateInfo.downloadProgress}%` }}
+                                                />
+                                            </div>
+                                        </div>
+                                    ) : updateInfo.restartPending ? (
+                                        <div className="flex flex-col gap-2">
+                                            <p className="text-sm text-center text-blue-600 font-medium">
+                                                Güncelleme hazr! Değişikliklerin uygulanması için yeniden başlatılması gerekiyor.
+                                            </p>
+                                            <Button
+                                                className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold"
+                                                size="sm"
+                                                onClick={() => useHotspotStore.getState().restartApp()}
+                                            >
+                                                Şimdi Yeniden Başlat
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <Button
+                                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+                                            size="sm"
+                                            onClick={() => installUpdate()}
+                                        >
+                                            Şimdi Güncelle
+                                        </Button>
+                                    )}
                                 </div>
                             )}
                         </CardContent>
                     </Card>
 
-                    <Button variant="outline" className="w-full" onClick={() => setShowSettings(false)}>
+                    <Button variant="outline" className="w-full" onClick={() => setSettingsOpen(false)}>
                         Geri Dön
                     </Button>
                 </div>
@@ -328,8 +366,11 @@ export function Dashboard() {
                     </div>
                     <div className="flex items-center gap-2">
                         <StatusIndicator status={status} isChecking={isChecking} />
-                        <Button variant="ghost" size="icon" onClick={() => setShowSettings(true)} title="Ayarlar">
+                        <Button variant="ghost" size="icon" onClick={() => setSettingsOpen(true)} title="Ayarlar">
                             <Settings className="h-4 w-4" />
+                            {updateInfo.status === 'available' && !updateInfo.isUpdating && (
+                                <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                            )}
                         </Button>
                     </div>
                 </div>
