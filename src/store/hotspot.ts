@@ -26,7 +26,7 @@ interface HotspotState {
     ping: number | null
     ipInfo: { local: string, public: string }
     networkStats: { received: number, transmitted: number }
-    speedTestResult: { download: number, upload: number, isTesting: boolean }
+    speedTestResult: SpeedTestResult
     updateInfo: {
         status: 'idle' | 'checking' | 'available' | 'up-to-date',
         latestVersion: string | null,
@@ -379,34 +379,67 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
                 // 2MB random payload
                 const uPayload = new Uint8Array(2 * 1024 * 1024);
 
+                // Use httpbin.org as it handles raw POSTs reliably for testing
+                xhr.open('POST', 'https://httpbin.org/post', true);
+
+                let lastLoaded = 0;
+                let lastTime = uStart;
+
                 xhr.upload.onprogress = (event) => {
-                    if (event.lengthComputable) {
-                        const currentTime = Date.now();
-                        const durationInSec = (currentTime - uStart) / 1000;
+                    const currentTime = Date.now();
+                    const durationInSec = (currentTime - uStart) / 1000;
 
-                        if (durationInSec > 0.1) {
-                            const currentBps = (event.loaded * 8) / durationInSec;
-                            const currentMbps = currentBps / 1000000;
+                    // Calculate "average speed from start" for stability
+                    if (event.lengthComputable && durationInSec > 0.05) {
+                        const currentBps = (event.loaded * 8) / durationInSec;
+                        const currentMbps = currentBps / 1000000;
 
-                            set((state) => ({
-                                speedTestResult: {
-                                    ...state.speedTestResult,
-                                    upload: parseFloat(currentMbps.toFixed(2))
-                                }
-                            }));
-                        }
+                        set((state) => ({
+                            speedTestResult: {
+                                ...state.speedTestResult,
+                                upload: parseFloat(currentMbps.toFixed(2))
+                            }
+                        }));
                     }
                 };
 
-                xhr.onload = () => resolve();
-                xhr.onerror = () => reject(new Error('Upload test failed'));
+                // The upload is actually finished when validation logic (onload on upload) fires 
+                // OR we can just use the last progress if it was 100%
+                // BUT xhr.onload fires after the RESPONSE is received (which includes download time).
+                // We want to capture the time when UPLOAD finished.
+                xhr.upload.onloadend = () => {
+                    const endDuration = (Date.now() - uStart) / 1000;
+                    if (endDuration > 0) {
+                        const finalMbps = (uPayload.length * 8) / (endDuration * 1000000);
+                        set((state) => ({
+                            speedTestResult: {
+                                ...state.speedTestResult,
+                                upload: parseFloat(finalMbps.toFixed(2))
+                            }
+                        }));
+                    }
+                    resolve();
+                };
 
-                // Cloudflare upload endpoint
-                xhr.open('POST', 'https://speed.cloudflare.com/__up');
+                xhr.onerror = (e) => {
+                    console.error('XHR Upload Error', e);
+                    reject(new Error('Upload test failed'));
+                };
+
+                // We don't need to wait for the full response body for the speed test result
+                // But we generally keep the request open. 
+                // resolving in upload.onloadend is safer format speed measurement perspective.
+
                 xhr.send(uPayload);
             });
 
-            set((state) => ({ speedTestResult: { ...state.speedTestResult, isTesting: false } }));
+            set((state) => ({
+                speedTestResult: {
+                    ...state.speedTestResult,
+                    isTesting: false,
+                    lastRun: Date.now()
+                }
+            }));
 
         } catch (e) {
             console.error('Speed test failed', e)
@@ -428,10 +461,8 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
         if (updateInfo.lastCheckTime && (now - updateInfo.lastCheckTime) < 30000) {
             console.log('Rate limited: too soon since last check');
             if (!silent) {
-                // UX: Simulate a quick check so the user feels the button worked
-                set((state) => ({
-                    updateInfo: { ...state.updateInfo, checkInProgress: true, status: 'checking' }
-                }));
+                // UX Improvement: Show fake loading state so user knows button worked
+                set((state) => ({ updateInfo: { ...state.updateInfo, checkInProgress: true } }));
                 setTimeout(() => {
                     set((state) => ({
                         updateInfo: {
