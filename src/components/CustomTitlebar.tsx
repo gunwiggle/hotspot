@@ -1,10 +1,10 @@
-import { getCurrentWindow } from '@tauri-apps/api/window'
-import { Minus, X, Zap, RotateCw } from 'lucide-react'
+import { getCurrentWindow } from '@tauri-apps/window'
+import { Minus, X, Zap, RotateCw, Shield } from 'lucide-react'
 import { useHotspotStore } from '@/store/hotspot'
 
 export function CustomTitlebar() {
     const appWindow = getCurrentWindow()
-    const { updateInfo, restartApp } = useHotspotStore()
+    const { updateInfo, restartApp, settings } = useHotspotStore()
 
     const minimize = () => appWindow.minimize()
     const close = () => appWindow.close()
@@ -21,6 +21,13 @@ export function CustomTitlebar() {
                     </div>
                     <span className="text-sm font-medium text-foreground/80">Hotspot Manager</span>
                 </div>
+
+                {settings.privacyMode && (
+                    <div className="ml-2 px-2 py-0.5 text-[10px] font-medium bg-purple-500/10 text-purple-500 border border-purple-500/20 rounded-full flex items-center gap-1 pointer-events-none">
+                        <Shield className="h-3 w-3" />
+                        Gizlilik Modu
+                    </div>
+                )}
 
                 {updateInfo.restartPending && (
                     <button

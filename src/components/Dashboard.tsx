@@ -276,14 +276,18 @@ export function Dashboard() {
                             <div className="flex items-center justify-between">
                                 <div className="space-y-0.5">
                                     <Label className={updateInfo.status === 'up-to-date' ? "text-green-600 font-bold" : ""}>
-                                        Sürüm v{appVersion} {updateInfo.status === 'up-to-date' ? ' (Güncel)' : ''}
+                                        Sürüm v{appVersion}
+                                        {updateInfo.status === 'up-to-date' && (
+                                            <span className="ml-2 inline-flex items-center text-xs font-normal text-green-600 bg-green-100 px-2 py-0.5 rounded-full">
+                                                <RefreshCw className="h-3 w-3 mr-1" />
+                                                Sistem Güncel
+                                            </span>
+                                        )}
                                     </Label>
-                                    <p className="text-sm text-muted-foreground">
-                                        {updateInfo.status === 'up-to-date' ? 'En güncel sürümü kullanıyorsunuz' :
-                                            updateInfo.status === 'available' && !updateInfo.isUpdating && !updateInfo.restartPending ? `Yeni sürüm mevcut: v${updateInfo.latestVersion}` :
-                                                updateInfo.isUpdating ? 'Güncelleme yükleniyor...' :
-                                                    updateInfo.restartPending ? 'Yeniden başlatma bekleniyor...' :
-                                                        'Güncellemeleri kontrol edin'}
+                                    <p className="text-xs text-muted-foreground">
+                                        {updateInfo.lastCheckTime
+                                            ? `Son kontrol: ${new Date(updateInfo.lastCheckTime).toLocaleTimeString()}`
+                                            : 'Henüz kontrol edilmedi'}
                                     </p>
                                 </div>
                                 <Button
@@ -293,7 +297,7 @@ export function Dashboard() {
                                     disabled={updateInfo.status === 'checking' || updateInfo.isUpdating || updateInfo.restartPending}
                                 >
                                     {updateInfo.status === 'checking' ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-                                    <span className="ml-2">Kontrol Et</span>
+                                    <span className="ml-2">{updateInfo.status === 'checking' ? 'Kontrol Ediliyor...' : 'Kontrol Et'}</span>
                                 </Button>
                             </div>
 
@@ -407,8 +411,9 @@ export function Dashboard() {
                                             id="password"
                                             type={showPassword ? 'text' : 'password'}
                                             placeholder="Şifreniz"
-                                            value={credentials.password}
-                                            onChange={(e) => setCredentials({ ...credentials, password: e.target.value })}
+                                            value={settings.privacyMode ? '********' : credentials.password}
+                                            onChange={(e) => !settings.privacyMode && setCredentials({ ...credentials, password: e.target.value })}
+                                            disabled={settings.privacyMode}
                                             autoComplete="current-password"
                                             className="pr-10"
                                         />
@@ -417,7 +422,8 @@ export function Dashboard() {
                                             variant="ghost"
                                             size="icon"
                                             className="absolute right-0 top-0 h-full w-10 px-3"
-                                            onClick={() => setShowPassword(!showPassword)}
+                                            onClick={() => !settings.privacyMode && setShowPassword(!showPassword)}
+                                            disabled={settings.privacyMode}
                                         >
                                             {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                         </Button>

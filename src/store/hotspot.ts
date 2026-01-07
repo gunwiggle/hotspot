@@ -505,9 +505,11 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
                     console.log('Otomatik güncelleme bulundu, sessizce indiriliyor...');
                     installUpdate();
                 } else {
-                    // Manuel kontrolde modal goster (eski davranis, ama artik sadece indir diyecek)
-                    // Veya manuel kontrolde de direkt indirip "hazir" diyebiliriz.
-                    // Tutarlilik icin: Manuel de olsa, buton "Guncelle" yine indirecek.
+                    // PERSISTENCE: Save release notes
+                    if (releaseNotes) {
+                        localStorage.setItem('hotspot_release_notes', releaseNotes);
+                    }
+
                     set({
                         updateInfo: {
                             ...get().updateInfo,
@@ -515,7 +517,7 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
                             latestVersion: update.version,
                             releaseNotes: releaseNotes,
                             downloadUrl: 'https://github.com/gunwiggle/hotspot/releases/latest',
-                            showModal: true, // Manuel kontrolde bilgi ver
+                            showModal: false, // Inline UI handles this
                             checkInProgress: false
                         }
                     });
@@ -530,7 +532,7 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
                             checkInProgress: false
                         }
                     }));
-                    setTimeout(() => set((state) => ({ updateInfo: { ...state.updateInfo, status: 'idle' } })), 3000);
+                    // Timeout removed to keep "System Up to Date" badge visible
                 } else {
                     set((state) => ({ updateInfo: { ...state.updateInfo, checkInProgress: false } }));
                 }
@@ -727,18 +729,21 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
 
                 // Only treat as pending if pendingVersion > currentVersion
                 if (compareVersions(pendingVersion, currentVersion) > 0) {
+                    const persistedNotes = localStorage.getItem('hotspot_release_notes');
                     set((state) => ({
                         updateInfo: {
                             ...state.updateInfo,
                             updateAvailable: true,
                             version: pendingVersion,
-                            status: 'available'
+                            status: 'available',
+                            releaseNotes: persistedNotes || state.updateInfo.releaseNotes, // Restore notes if available
+                            downloadUrl: 'https://github.com/gunwiggle/hotspot/releases/latest' // Restore URL assumption
                         },
                         restartPending: true
                     }));
                 } else {
-                    // Pending version is same or older, clear it
                     localStorage.removeItem('hotspot_pending_update');
+                    localStorage.removeItem('hotspot_release_notes'); // Clean up notes too
                     set((state) => ({
                         updateInfo: {
                             ...state.updateInfo,
@@ -756,9 +761,12 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
 
     clearPendingUpdate: () => {
         localStorage.removeItem('hotspot_pending_update');
+        localStorage.removeItem('hotspot_release_notes');
         set((state) => ({
             updateInfo: {
                 ...state.updateInfo,
+                updateAvailable: false,
+                status: 'idle',
                 pendingUpdateVersion: null,
                 restartPending: false
             }
