@@ -4,6 +4,11 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      version_tag:
+        description: 'Version Tag (e.g. v0.2.6). Leave empty if using git tag.'
+        required: false
+        type: string
 
 jobs:
   publish-tauri:
@@ -55,8 +60,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'Hotspot Manager ${{ github.ref_name }}'
+          tagName: ${{ github.event.inputs.version_tag || github.ref_name }}
+          releaseName: 'Hotspot Manager ${{ github.event.inputs.version_tag || github.ref_name }}'
           releaseBody: 'See the assets to download this version and install.'
           releaseDraft: true
           prerelease: false
@@ -68,8 +73,13 @@ jobs:
           GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
         shell: bash
         run: |
-          # Extract version from tag (remove v prefix)
-          VERSION="${{ github.ref_name }}"
+          # Extract version
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ github.event.inputs.version_tag }}" ]; then
+            VERSION="${{ github.event.inputs.version_tag }}"
+          else
+            VERSION="${{ github.ref_name }}"
+          fi
+          
           VERSION="${VERSION#v}"
           
           # Find the signature file
