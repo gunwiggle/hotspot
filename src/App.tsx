@@ -5,11 +5,12 @@ import { UpdateModal } from "./components/UpdateModal";
 import { useHotspotStore } from "./store/hotspot";
 
 function App() {
-  const { loadSkippedVersion, checkForUpdates } = useHotspotStore();
+  const { loadSkippedVersion, loadPendingUpdate } = useHotspotStore();
 
   useEffect(() => {
     loadSkippedVersion();
-    checkForUpdates(true, true);
+    loadPendingUpdate(); // Restore pending update if exists
+    // Auto-check removed - will be triggered after successful connection
   }, []);
 
   return (

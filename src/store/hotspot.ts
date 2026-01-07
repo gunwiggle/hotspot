@@ -36,7 +36,10 @@ interface HotspotState {
         showModal: boolean,
         downloadProgress: number,
         isUpdating: boolean,
-        restartPending: boolean
+        restartPending: boolean,
+        pendingUpdateVersion: string | null,
+        lastCheckTime: number | null,
+        checkInProgress: boolean
     }
     isSettingsOpen: boolean
     setSettingsOpen: (isOpen: boolean) => void
@@ -61,9 +64,15 @@ interface HotspotState {
     skipVersion: (version: string) => void
     dismissUpdateModal: () => void
     loadSkippedVersion: () => void
+    loadPendingUpdate: () => void
+    clearPendingUpdate: () => void
 }
 
+// Keep track of the pending update object
+let pendingUpdate: any = null;
+
 export const useHotspotStore = create<HotspotState>((set, get) => ({
+    // ... existing initial state ...
     status: 'disconnected',
     credentials: { username: '', password: '' },
     logs: [],
@@ -89,7 +98,10 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
         showModal: false,
         downloadProgress: 0,
         isUpdating: false,
-        restartPending: false
+        restartPending: false,
+        pendingUpdateVersion: null,
+        lastCheckTime: null,
+        checkInProgress: false
     },
     isSettingsOpen: false,
 
@@ -189,6 +201,9 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
                 if (status !== 'connected') {
                     setStatus('connected')
                     get().addLog('Bağlantı doğrulandı - İnternet mevcut')
+
+                    // Trigger silent update check after successful connection
+                    get().checkForUpdates(true, true)
                 } else if (!silent) {
                     // Eger zaten bagliysak ve manuel kontrol ettiysek ikonu yesile dondur
                     invoke('update_tray_icon', { status: 'connected' }).catch(() => { })
@@ -350,14 +365,58 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
     },
 
     checkForUpdates: async (silent = false, isAutoCheck = false) => {
-        set((state) => ({ updateInfo: { ...state.updateInfo, status: 'checking' } }))
+        const { updateInfo } = get();
+
+        // MUTEX: Prevent concurrent checks
+        if (updateInfo.checkInProgress) {
+            console.log('Update check already in progress, skipping');
+            return;
+        }
+
+        // RATE LIMITING: Minimum 30 seconds between checks
+        const now = Date.now();
+        if (updateInfo.lastCheckTime && (now - updateInfo.lastCheckTime) < 30000) {
+            console.log('Rate limited: too soon since last check');
+            return;
+        }
+
+        // Skip if already pending restart
+        if (updateInfo.restartPending) {
+            console.log('Update already downloaded, awaiting restart');
+            return;
+        }
+
+        set((state) => ({
+            updateInfo: {
+                ...state.updateInfo,
+                checkInProgress: true,
+                status: silent ? state.updateInfo.status : 'checking',
+                lastCheckTime: now
+            }
+        }));
 
         try {
             const { check } = await import('@tauri-apps/plugin-updater');
-            const update = await check();
+            const { invoke } = await import('@tauri-apps/api/core');
+
+            const GITHUB_TOKEN = await invoke<string>('get_github_token');
+
+            const update = await check({
+                headers: {
+                    'Authorization': `Bearer ${GITHUB_TOKEN}`,
+                    'Accept': 'application/octet-stream'
+                }
+            });
 
             if (update) {
-                const { updateInfo } = get();
+                const { updateInfo, installUpdate } = get();
+
+                // Zaten güncelleme sürecindeysek veya restart bekliyorsak tekrar işlem yapma
+                if (updateInfo.isUpdating || updateInfo.restartPending) {
+                    set((state) => ({ updateInfo: { ...state.updateInfo, checkInProgress: false } }));
+                    return;
+                }
+
                 let releaseNotes = update.body || 'Performans iyileştirmeleri ve hata düzeltmeleri içerir.';
 
                 try {
@@ -367,126 +426,157 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
                         if (data.body) releaseNotes = data.body;
                     }
                 } catch (e) {
-                    console.error('Failed to fetch GH release notes', e);
+                    // console.error('Failed to fetch GH release notes', e);
                 }
 
-                // Modal gosterim mantigi:
-                // 1. Eger otomatik kontrol ise (uygulama acilisi) VE versiyon atlanmamissa goster.
-                // 2. Eger manuel kontrol ise (isAutoCheck=false) VE ayarlar sayfasi acik degilse goster (ama manuel kontrolde genelde ayarlar aciktir).
-                // Kullanici istegi: "kontrol et'e tıkladığımda hala modal şeklinde açılıyor, bu şekilde değil de yenilikler kısmına gelmeli"
-                // Bu yuzden manuel kontrolde (isAutoCheck=false) modal ASLA acilmamali.
-
-                const shouldShowModal = isAutoCheck && updateInfo.skippedVersion !== update.version;
-
-                set({
-                    updateInfo: {
-                        ...get().updateInfo,
-                        status: 'available',
-                        latestVersion: update.version,
-                        releaseNotes: releaseNotes,
-                        downloadUrl: 'https://github.com/gunwiggle/hotspot/releases/latest',
-                        showModal: shouldShowModal
-                    }
-                });
-            } else {
-                set((state) => ({ updateInfo: { ...state.updateInfo, status: 'up-to-date', showModal: false } }));
-                if (!silent) {
-                    setTimeout(() => set((state) => ({ updateInfo: { ...state.updateInfo, status: 'idle' } })), 3000);
-                }
-            }
-        } catch (e) {
-            console.error('Updater plugin failed, falling back to manual API check', e);
-            // Fallback to manual GitHub API check
-            try {
-                const res = await fetch('https://api.github.com/repos/gunwiggle/hotspot/releases/latest', {
-                    headers: { 'Accept': 'application/vnd.github.v3+json' }
-                });
-                if (!res.ok) throw new Error('GitHub API error');
-                const data = await res.json();
-                const latestVersion = data.tag_name.replace('v', '');
-                // const currentVersion = '0.2.1'; // TODO: fetch from tauri app
-
-                if (latestVersion) { // simple check
-                    const { updateInfo } = get();
-                    const shouldShowModal = isAutoCheck && updateInfo.skippedVersion !== latestVersion;
-
+                // Eger otomatik kontrol ise (internet baglandiginda), KULLANICIYA SORMADAN indir
+                if (isAutoCheck) {
+                    console.log('Otomatik güncelleme bulundu, sessizce indiriliyor...');
+                    installUpdate();
+                } else {
+                    // Manuel kontrolde modal goster (eski davranis, ama artik sadece indir diyecek)
+                    // Veya manuel kontrolde de direkt indirip "hazir" diyebiliriz.
+                    // Tutarlilik icin: Manuel de olsa, buton "Guncelle" yine indirecek.
                     set({
                         updateInfo: {
                             ...get().updateInfo,
                             status: 'available',
-                            latestVersion,
-                            releaseNotes: data.body,
-                            downloadUrl: data.html_url,
-                            showModal: shouldShowModal
+                            latestVersion: update.version,
+                            releaseNotes: releaseNotes,
+                            downloadUrl: 'https://github.com/gunwiggle/hotspot/releases/latest',
+                            showModal: true, // Manuel kontrolde bilgi ver
+                            checkInProgress: false
                         }
                     });
-                } else {
-                    set((state) => ({ updateInfo: { ...state.updateInfo, status: 'up-to-date' } }));
                 }
-            } catch (apiError) {
-                set((state) => ({ updateInfo: { ...state.updateInfo, status: 'idle' } }));
+            } else {
+                if (!silent) {
+                    set((state) => ({
+                        updateInfo: {
+                            ...state.updateInfo,
+                            status: 'up-to-date',
+                            showModal: false,
+                            checkInProgress: false
+                        }
+                    }));
+                    setTimeout(() => set((state) => ({ updateInfo: { ...state.updateInfo, status: 'idle' } })), 3000);
+                } else {
+                    set((state) => ({ updateInfo: { ...state.updateInfo, checkInProgress: false } }));
+                }
             }
+        } catch (e) {
+            console.error('Updater check failed', e);
+            set((state) => ({
+                updateInfo: {
+                    ...state.updateInfo,
+                    status: silent ? state.updateInfo.status : 'idle',
+                    checkInProgress: false
+                }
+            }));
         }
     },
 
     installUpdate: async () => {
         const { updateInfo } = get();
-        // Prevent multiple clicks if already updating
         if (updateInfo.isUpdating) return;
 
-        set((state) => ({ updateInfo: { ...state.updateInfo, isUpdating: true, downloadProgress: 0 } }));
+        // UI'da indirme barı göstermek isteyip istemediğimize karar verelim.
+        // Silent modda bile "İndiriliyor..." yazısı köşede şık durabilir.
+        // Ama modal açmasın.
+        set((state) => ({
+            updateInfo: {
+                ...state.updateInfo,
+                isUpdating: true,
+                downloadProgress: 0,
+                // Silent ise modal açma, değilse belki aç (ama gerek yok, buton loading dönecek)
+            }
+        }));
 
         try {
             const { check } = await import('@tauri-apps/plugin-updater');
+            const { invoke } = await import('@tauri-apps/api/core');
 
-            const update = await check();
+            let update = pendingUpdate; // Check'ten geleni kullanmaya calis
+
+            // Eger pending yoksa tekrar check et (silent install icin gerekli olabilir)
+            if (!update) {
+                const GITHUB_TOKEN = await invoke<string>('get_github_token');
+                update = await check({
+                    headers: {
+                        'Authorization': `Bearer ${GITHUB_TOKEN}`,
+                        'Accept': 'application/octet-stream'
+                    }
+                });
+            }
+
             if (update) {
+                pendingUpdate = update;
+                const targetVersion = update.version;
+
                 let downloaded = 0;
                 let contentLength = 0;
-                await update.downloadAndInstall(async (event) => {
+
+                await update.download(async (event: any) => {
                     switch (event.event) {
                         case 'Started':
                             contentLength = event.data.contentLength || 0;
+                            console.log(`Download started: ${contentLength} bytes`);
                             break;
                         case 'Progress':
                             downloaded += event.data.chunkLength;
                             if (contentLength > 0) {
                                 const percent = Math.round((downloaded / contentLength) * 100);
-                                // Prevent going back from 100 immediately
                                 set((state) => ({ updateInfo: { ...state.updateInfo, downloadProgress: percent } }));
                             }
                             break;
                         case 'Finished':
+                            console.log('Download finished successfully');
+
+                            // PERSISTENCE: Save to localStorage
+                            localStorage.setItem('hotspot_pending_update', targetVersion);
+
                             set((state) => ({
                                 updateInfo: {
                                     ...state.updateInfo,
                                     downloadProgress: 100,
                                     isUpdating: false,
-                                    restartPending: true
+                                    restartPending: true,
+                                    pendingUpdateVersion: targetVersion,
+                                    showModal: false,
+                                    checkInProgress: false
                                 }
                             }));
                             break;
                     }
                 });
 
-                // Ensure state is updated even if 'Finished' event was missed
+                // Fallback
                 set((state) => ({
                     updateInfo: {
                         ...state.updateInfo,
                         downloadProgress: 100,
                         isUpdating: false,
-                        restartPending: true
+                        restartPending: true,
+                        showModal: false
                     }
                 }));
             }
         } catch (error) {
-            console.error('Update installation failed:', error);
+            console.error('Update download failed:', error);
             set((state) => ({ updateInfo: { ...state.updateInfo, isUpdating: false, status: 'available' } }));
-            throw error;
         }
     },
 
     restartApp: async () => {
+        if (pendingUpdate) {
+            try {
+                await pendingUpdate.install();
+                return;
+            } catch (e) {
+                console.error('Update install failed, falling back to relaunch', e);
+            }
+        }
+
         const { relaunch } = await import('@tauri-apps/plugin-process');
         await relaunch();
     },
@@ -511,5 +601,39 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
         if (skipped) {
             set((state) => ({ updateInfo: { ...state.updateInfo, skippedVersion: skipped } }));
         }
+    },
+
+    loadPendingUpdate: () => {
+        const pendingVersion = localStorage.getItem('hotspot_pending_update');
+        if (pendingVersion) {
+            const currentVersion = '0.2.4'; // TODO: Get from Tauri
+
+            // Only restore if pending version is different from current
+            if (pendingVersion !== currentVersion) {
+                console.log(`Restoring pending update: ${pendingVersion}`);
+                set((state) => ({
+                    updateInfo: {
+                        ...state.updateInfo,
+                        pendingUpdateVersion: pendingVersion,
+                        restartPending: true,
+                        latestVersion: pendingVersion
+                    }
+                }));
+            } else {
+                // Already updated, clear the pending flag
+                localStorage.removeItem('hotspot_pending_update');
+            }
+        }
+    },
+
+    clearPendingUpdate: () => {
+        localStorage.removeItem('hotspot_pending_update');
+        set((state) => ({
+            updateInfo: {
+                ...state.updateInfo,
+                pendingUpdateVersion: null,
+                restartPending: false
+            }
+        }));
     }
 }))

@@ -1,10 +1,10 @@
 import { useEffect } from 'react'
-import { X, Sparkles, ArrowDownToLine, Clock } from 'lucide-react'
+import { X, Sparkles, ArrowDownToLine, Clock, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useHotspotStore } from '@/store/hotspot'
 
 export function UpdateModal() {
-    const { updateInfo, skipVersion, dismissUpdateModal, setSettingsOpen } = useHotspotStore()
+    const { updateInfo, skipVersion, dismissUpdateModal, installUpdate } = useHotspotStore()
 
     useEffect(() => {
         const handleEscape = (e: KeyboardEvent) => {
@@ -16,7 +16,7 @@ export function UpdateModal() {
         return () => window.removeEventListener('keydown', handleEscape)
     }, [updateInfo.showModal, dismissUpdateModal])
 
-    if (!updateInfo.showModal || updateInfo.status !== 'available' || updateInfo.isUpdating) {
+    if (!updateInfo.showModal || updateInfo.status !== 'available') {
         return null
     }
 
@@ -26,8 +26,8 @@ export function UpdateModal() {
         }
     }
 
-    const handleUpdate = () => {
-        setSettingsOpen(true)
+    const handleDownload = () => {
+        installUpdate()
         dismissUpdateModal()
     }
 
@@ -70,16 +70,27 @@ export function UpdateModal() {
                             variant="outline"
                             onClick={handleSkip}
                             className="flex-1 gap-2"
+                            disabled={updateInfo.isUpdating}
                         >
                             <Clock size={16} />
                             Daha Sonra
                         </Button>
                         <Button
-                            onClick={handleUpdate}
+                            onClick={handleDownload}
                             className="flex-1 gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20"
+                            disabled={updateInfo.isUpdating}
                         >
-                            <ArrowDownToLine size={16} />
-                            İncele ve Güncelle
+                            {updateInfo.isUpdating ? (
+                                <>
+                                    <Loader2 size={16} className="animate-spin" />
+                                    İndiriliyor...
+                                </>
+                            ) : (
+                                <>
+                                    <ArrowDownToLine size={16} />
+                                    İndir
+                                </>
+                            )}
                         </Button>
                     </div>
                 </div>

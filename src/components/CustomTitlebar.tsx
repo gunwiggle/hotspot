@@ -1,31 +1,46 @@
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { Minus, X, Zap } from 'lucide-react'
+import { Minus, X, Zap, RotateCw } from 'lucide-react'
+import { useHotspotStore } from '@/store/hotspot'
 
 export function CustomTitlebar() {
     const appWindow = getCurrentWindow()
+    const { updateInfo, restartApp } = useHotspotStore()
 
     const minimize = () => appWindow.minimize()
     const close = () => appWindow.close()
 
     return (
         <div className="h-10 bg-background border-b flex select-none shrink-0 overflow-hidden">
-            {/* 1. SOL TARAF: Tamamen Sürüklenebilir Alan (Butonlara kadar) */}
-            {/* data-tauri-drag-region bu div'de olduğu için, sadece burası sürükler. */}
             <div
                 data-tauri-drag-region
                 className="flex-1 flex items-center px-4 gap-2 cursor-default"
             >
-                {/* İçerik, tıklamaları engellememeli ama zaten drag region içinde olduğu için sorun yok */}
                 <div className="flex items-center gap-2 pointer-events-none">
                     <div className="bg-primary/20 p-1 rounded">
                         <Zap className="h-4 w-4 text-green-500" />
                     </div>
                     <span className="text-sm font-medium text-foreground/80">Hotspot Manager</span>
                 </div>
+
+                {updateInfo.restartPending && (
+                    <button
+                        onClick={restartApp}
+                        className="ml-auto mr-2 px-3 py-1 text-xs font-medium bg-green-600 hover:bg-green-700 text-white rounded-md flex items-center gap-1.5 transition-colors pointer-events-auto animate-pulse"
+                        type="button"
+                    >
+                        <RotateCw className="h-3 w-3" />
+                        Yeniden Başlat
+                    </button>
+                )}
+
+                {updateInfo.isUpdating && !updateInfo.restartPending && (
+                    <div className="ml-auto mr-2 px-3 py-1 text-xs font-medium bg-blue-600/20 text-blue-400 rounded-md flex items-center gap-1.5 pointer-events-none">
+                        <div className="h-2 w-2 rounded-full bg-blue-400 animate-pulse" />
+                        Güncelleme İndiriliyor... {updateInfo.downloadProgress}%
+                    </div>
+                )}
             </div>
 
-            {/* 2. SAĞ TARAF: Butonlar (Drag Region YOK) */}
-            {/* Burası drag region'ın DIŞINDA olduğu için sürükleme tetiklemez, butonlar çalışır. */}
             <div className="flex items-center shrink-0 bg-background z-50">
                 <button
                     onClick={minimize}

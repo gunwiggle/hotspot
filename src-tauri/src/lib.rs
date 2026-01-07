@@ -317,6 +317,14 @@ fn get_network_stats(state: tauri::State<AppState>) -> NetworkStats {
     }
 }
 
+mod secrets;
+
+#[tauri::command]
+fn get_github_token() -> String {
+    // "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".to_string()
+    secrets::GITHUB_TOKEN.to_string()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -422,7 +430,8 @@ pub fn run() {
             load_settings,
             perform_logout,
             get_ip_info,
-            get_network_stats
+            get_network_stats,
+            get_github_token
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
