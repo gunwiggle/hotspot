@@ -1,4 +1,4 @@
-import { getCurrentWindow } from '@tauri-apps/window'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import { Minus, X, Zap, RotateCw, Shield } from 'lucide-react'
 import { useHotspotStore } from '@/store/hotspot'
 
