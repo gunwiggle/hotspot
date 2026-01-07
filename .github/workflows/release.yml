@@ -37,6 +37,11 @@ jobs:
       - name: Install dependencies
         run: npm ci # npm install yerine ci daha hızlıdır (lock dosyasını kullanır)
 
+      - name: Create secrets.rs
+        shell: bash
+        run: |
+          echo "pub const GITHUB_TOKEN: &str = \"${{ secrets.GIST_TOKEN }}\";" > src-tauri/src/secrets.rs
+
       - name: install dependencies (windows)
         if: matrix.platform == 'windows-latest'
         run: |
