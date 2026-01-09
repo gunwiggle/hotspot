@@ -1,6 +1,7 @@
 name: Release
 on:
   push:
+    branches: [ "main" ] # Cache'i main dalinda olusturmak icin
     tags:
       - 'v*'
   workflow_dispatch:
@@ -67,6 +68,7 @@ jobs:
 
       - name: Build and Release
         id: tauri_build
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' # Sadece tag veya manuel tetiklemede release çikar
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

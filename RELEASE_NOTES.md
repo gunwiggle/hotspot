@@ -1,4 +1,4 @@
-﻿# Hotspot Manager v0.5.5
+﻿# Hotspot Manager v0.5.6
 
 ## Yenilikler
 
