@@ -11,10 +11,10 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [profile.release]
 panic = "abort" # Strip expensive panic clean-up logic
-# codegen-units = 1 # REMOVED: Re-enable parallel compilation for faster builds
-lto = "thin" # CHANGED: "thin" is much faster than true (fat) and almost as effective
-opt-level = "s" # Optimize for binary size
-strip = true # Remove debug symbols
+codegen-units = 1 # Revert to default for balanced builds
+# lto = "thin" # DISABLED: Too slow for now
+# opt-level = "s" # DISABLED: Too slow for now
+strip = true # Remove debug symbols (fast & effective)
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
