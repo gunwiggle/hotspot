@@ -247,7 +247,7 @@ export function Dashboard() {
                         <CardContent className="space-y-6">
                             <div className="flex items-center justify-between">
                                 <div className="space-y-0.5">
-                                    <Label>Gizlilik Modu</Label>
+                                    <Label>Gizlilik Modu Mal Ali :D</Label>
                                     <p className="text-sm text-muted-foreground">
                                         IP adresini ve kullanıcı adını gizle
                                     </p>
