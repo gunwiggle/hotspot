@@ -81,12 +81,10 @@ jobs:
 
       - name: Compile for Cache (Main Branch)
         if: github.ref == 'refs/heads/main'
-        run: npm run tauri build
+        run: |
+          npm run build
+          cargo build --release --manifest-path src-tauri/Cargo.toml
         env:
-          # Fake keys or minimal config if needed, usually tauri build works without signing for debug/unsigned release
-          # But we are building release profile.
-          # If signing is configured in tauri.conf.json, it might complain.
-          # Assuming no strict signing enforcement for just building artifacts.
           CI: true
 
       - name: Build and Release
