@@ -398,7 +398,7 @@ export function Dashboard() {
                                         id="username"
                                         type="text"
                                         placeholder="Kullanıcı adınız"
-                                        value={settings.privacyMode ? '**********' : credentials.username}
+                                        value={settings.privacyMode ? '************' : credentials.username}
                                         onChange={(e) => !settings.privacyMode && setCredentials({ ...credentials, username: e.target.value })}
                                         disabled={settings.privacyMode}
                                         autoComplete="username"
@@ -411,7 +411,7 @@ export function Dashboard() {
                                             id="password"
                                             type={showPassword ? 'text' : 'password'}
                                             placeholder="Şifreniz"
-                                            value={settings.privacyMode ? '**********' : credentials.password}
+                                            value={settings.privacyMode ? '************' : credentials.password}
                                             onChange={(e) => !settings.privacyMode && setCredentials({ ...credentials, password: e.target.value })}
                                             disabled={settings.privacyMode}
                                             autoComplete="current-password"
@@ -420,18 +420,12 @@ export function Dashboard() {
                                         <Button
                                             type="button"
                                             variant="ghost"
-                                            size="sm"
-                                            className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                                            size="icon"
+                                            className="absolute right-0 top-0 h-full w-10 px-3"
                                             onClick={() => !settings.privacyMode && setShowPassword(!showPassword)}
                                             disabled={settings.privacyMode}
                                         >
-                                            {settings.privacyMode ? (
-                                                <EyeOff className="h-4 w-4 text-muted-foreground opacity-50" />
-                                            ) : showPassword ? (
-                                                <EyeOff className="h-4 w-4 text-muted-foreground" />
-                                            ) : (
-                                                <Eye className="h-4 w-4 text-muted-foreground" />
-                                            )}
+                                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                         </Button>
                                     </div>
                                 </div>

@@ -26,7 +26,7 @@ interface HotspotState {
     ping: number | null
     ipInfo: { local: string, public: string }
     networkStats: { received: number, transmitted: number }
-    speedTestResult: SpeedTestResult
+    speedTestResult: { download: number, upload: number, isTesting: boolean, lastRun: number | null }
     updateInfo: {
         status: 'idle' | 'checking' | 'available' | 'up-to-date',
         latestVersion: string | null,
@@ -88,7 +88,7 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
     ping: null,
     ipInfo: { local: '...', public: '...' },
     networkStats: { received: 0, transmitted: 0 },
-    speedTestResult: { download: 0, upload: 0, isTesting: false },
+    speedTestResult: { download: 0, upload: 0, isTesting: false, lastRun: null },
     updateInfo: {
         status: 'idle',
         latestVersion: null,
@@ -326,7 +326,7 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
 
     // 10. Hız Testi (Gelişmiş: Download & Upload)
     runSpeedTest: async () => {
-        set({ speedTestResult: { download: 0, upload: 0, isTesting: true } })
+        set((state) => ({ speedTestResult: { ...state.speedTestResult, download: 0, upload: 0, isTesting: true } }))
 
         try {
             // STEP 1: REAL-TIME DOWNLOAD TEST (Cloudflare ~10MB to give time for ramp-up)
@@ -433,22 +433,21 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
                 xhr.send(uPayload);
             });
 
-            set((state) => ({
-                speedTestResult: {
-                    ...state.speedTestResult,
-                    isTesting: false,
-                    lastRun: Date.now()
-                }
-            }));
+            set((state) => ({ speedTestResult: { ...state.speedTestResult, isTesting: false, lastRun: Date.now() } }));
 
         } catch (e) {
             console.error('Speed test failed', e)
-            set({ speedTestResult: { download: 0, upload: 0, isTesting: false } })
+            set((state) => ({ speedTestResult: { ...state.speedTestResult, download: 0, upload: 0, isTesting: false } }))
         }
     },
 
     checkForUpdates: async (silent = false, isAutoCheck = false) => {
         const { updateInfo } = get();
+
+        // Manual check should always show UI feedback immediately
+        if (!silent) {
+            set((state) => ({ updateInfo: { ...state.updateInfo, status: 'checking' } }));
+        }
 
         // MUTEX: Prevent concurrent checks
         if (updateInfo.checkInProgress) {
@@ -461,28 +460,33 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
         if (updateInfo.lastCheckTime && (now - updateInfo.lastCheckTime) < 30000) {
             console.log('Rate limited: too soon since last check');
             if (!silent) {
-                // UX Improvement: Show fake loading state so user knows button worked
-                set((state) => ({ updateInfo: { ...state.updateInfo, checkInProgress: true } }));
-                setTimeout(() => {
-                    set((state) => ({
+                // Fake a delay for better UX
+                await new Promise(r => setTimeout(r, 1000));
+                set((state) => {
+                    if (isAutoCheck && state.updateInfo.status === 'idle') {
+                        return {
+                            updateInfo: {
+                                ...state.updateInfo,
+                                status: 'up-to-date',
+                                checkInProgress: false,
+                                lastCheckTime: now
+                            }
+                        };
+                    }
+                    return {
                         updateInfo: {
                             ...state.updateInfo,
+                            status: 'up-to-date',
                             checkInProgress: false,
-                            // Restore 'available' if it was there, otherwise 'idle' (or 'up-to-date')
-                            status: state.updateInfo.status === 'available' ? 'available' : 'idle'
+                            lastCheckTime: now
                         }
-                    }));
-                }, 800);
+                    };
+                });
             }
             return;
         }
 
-        // Skip if already pending restart
-        if (updateInfo.restartPending) {
-            console.log('Update already downloaded, awaiting restart');
-            return;
-        }
-
+        // START REAL CHECK
         set((state) => ({
             updateInfo: {
                 ...state.updateInfo,
@@ -559,26 +563,22 @@ export const useHotspotStore = create<HotspotState>((set, get) => ({
                     });
                 }
             } else {
-                if (!silent) {
-                    set((state) => ({
-                        updateInfo: {
-                            ...state.updateInfo,
-                            status: 'up-to-date',
-                            showModal: false,
-                            checkInProgress: false
-                        }
-                    }));
-                    // Timeout removed to keep "System Up to Date" badge visible
-                } else {
-                    set((state) => ({ updateInfo: { ...state.updateInfo, checkInProgress: false } }));
-                }
+                // Always show "up-to-date" status after a successful check, even if silent/auto.
+                set((state) => ({
+                    updateInfo: {
+                        ...state.updateInfo,
+                        status: 'up-to-date',
+                        showModal: false,
+                        checkInProgress: false
+                    }
+                }));
             }
         } catch (e) {
             console.error('Updater check failed', e);
             set((state) => ({
                 updateInfo: {
                     ...state.updateInfo,
-                    status: silent ? state.updateInfo.status : 'idle',
+                    status: silent ? (state.updateInfo.status === 'idle' ? 'up-to-date' : state.updateInfo.status) : 'idle',
                     checkInProgress: false
                 }
             }));
