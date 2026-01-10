@@ -1,14 +1,21 @@
 use image::imageops::FilterType;
 use local_ip_address::local_ip;
 use serde::{Deserialize, Serialize};
+use std::process::Command;
 use std::sync::Mutex;
 use sysinfo::{NetworkExt, System, SystemExt};
+use tauri::utils::platform::current_exe;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager,
 };
 use tauri_plugin_store::StoreExt;
+
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Credentials {
@@ -325,16 +332,138 @@ fn get_github_token() -> String {
     secrets::GITHUB_TOKEN.to_string()
 }
 
+#[tauri::command]
+async fn enable_startup() -> Result<(), String> {
+    let exe_path = current_exe().map_err(|e| e.to_string())?;
+    let exe_str = exe_path.to_str().ok_or("Invalid path")?;
+
+    // /sc ONLOGON : Run when user logs on
+    // /rl HIGHEST : Run with highest privileges (Admin)
+    // /f : Force create
+    // /tn : Task Name
+    // /tr : Task Run
+    let output = Command::new("schtasks")
+        .args(&[
+            "/create",
+            "/tn",
+            "HotspotManager",
+            "/tr",
+            &format!("\"{}\"", exe_str),
+            "/sc",
+            "ONLOGON",
+            "/rl",
+            "HIGHEST",
+            "/f",
+        ])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn disable_startup() -> Result<(), String> {
+    let _output = Command::new("schtasks")
+        .args(&["/delete", "/tn", "HotspotManager", "/f"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    // We don't worry if it failed (e.g. didn't exist)
+    Ok(())
+}
+
+#[tauri::command]
+async fn is_startup_enabled() -> bool {
+    let output = Command::new("schtasks")
+        .args(&["/query", "/tn", "HotspotManager"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+
+    match output {
+        Ok(o) => o.status.success(),
+        Err(_) => false,
+    }
+}
+
+fn check_and_migrate_legacy_autostart() {
+    // Check for standard Tauri autostart registry keys
+    // Try both product name and bundle identifier just in case
+    let keys_to_check = ["Hotspot Manager", "com.hotspot.app", "hotspot"];
+
+    for key in keys_to_check {
+        let check = Command::new("reg")
+            .args(&[
+                "query",
+                "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+                "/v",
+                key,
+            ])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+
+        if let Ok(output) = check {
+            if output.status.success() {
+                println!("Found legacy autostart key: {}. Migrating...", key);
+
+                // 1. Create new Scheduled Task (preserve the user's "enabled" preference)
+                // We run this synchronously here since we are in setup
+                if let Ok(exe_path) = current_exe() {
+                    if let Some(exe_str) = exe_path.to_str() {
+                        let _ = Command::new("schtasks")
+                            .args(&[
+                                "/create",
+                                "/tn",
+                                "HotspotManager",
+                                "/tr",
+                                &format!("\"{}\"", exe_str),
+                                "/sc",
+                                "ONLOGON",
+                                "/rl",
+                                "HIGHEST",
+                                "/f",
+                            ])
+                            .creation_flags(CREATE_NO_WINDOW)
+                            .output();
+                    }
+                }
+
+                // 2. Delete the old registry key
+                let _ = Command::new("reg")
+                    .args(&[
+                        "delete",
+                        "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+                        "/v",
+                        key,
+                        "/f",
+                    ])
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .output();
+            }
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_autostart::Builder::new().build())
+        // .plugin(tauri_plugin_autostart::Builder::new().build()) // Removed in favor of custom impl
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState::default())
         .setup(|app| {
+            // Check for legacy registry keys and migrate them to Task Scheduler
+            std::thread::spawn(|| {
+                check_and_migrate_legacy_autostart();
+            });
+
             let quit = MenuItem::with_id(app, "quit", "Çıkış", true, None::<&str>)?;
             let show = MenuItem::with_id(app, "show", "Pencereyi Göster", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show, &quit])?;
@@ -431,7 +560,10 @@ pub fn run() {
             perform_logout,
             get_ip_info,
             get_network_stats,
-            get_github_token
+            get_github_token,
+            enable_startup,
+            disable_startup,
+            is_startup_enabled
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

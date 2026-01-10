@@ -12,9 +12,6 @@
     "core:window:allow-maximize",
     "core:window:allow-close",
     "core:window:allow-start-dragging",
-    "autostart:allow-enable",
-    "autostart:allow-disable",
-    "autostart:allow-is-enabled",
     "updater:default",
     "process:default"
   ]

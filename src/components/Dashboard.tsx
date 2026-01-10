@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { useHotspotStore, type ConnectionStatus } from '@/store/hotspot'
 import { getVersion } from '@tauri-apps/api/app'
-import { enable, disable, isEnabled } from '@tauri-apps/plugin-autostart'
+import { invoke } from '@tauri-apps/api/core'
+
 
 const StatusBadge = ({ status, isChecking }: { status: ConnectionStatus, isChecking: boolean }) => {
     if (isChecking) {
@@ -141,7 +142,7 @@ export function Dashboard() {
 
     useEffect(() => {
         // Check auto-start status on mount
-        isEnabled().then(setAutoStart).catch(console.error)
+        invoke<boolean>('is_startup_enabled').then(setAutoStart).catch(console.error)
         getVersion().then(setAppVersion).catch(console.error)
     }, [])
 
@@ -170,9 +171,9 @@ export function Dashboard() {
     const handleAutoStartChange = async (checked: boolean) => {
         try {
             if (checked) {
-                await enable()
+                await invoke('enable_startup')
             } else {
-                await disable()
+                await invoke('disable_startup')
             }
             setAutoStart(checked)
         } catch (error) {
