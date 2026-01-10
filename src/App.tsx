@@ -9,7 +9,17 @@ function App() {
   useEffect(() => {
     loadSkippedVersion();
     loadPendingUpdate(); // Restore pending update if exists
-    // Auto-check removed - will be triggered after successful connection
+
+    // Initial silent check
+    const { checkForUpdates } = useHotspotStore.getState();
+    checkForUpdates(true, true);
+
+    // Check every 15 minutes (15 * 60 * 1000 = 900000 ms)
+    const interval = setInterval(() => {
+      checkForUpdates(true, true);
+    }, 900000);
+
+    return () => clearInterval(interval);
   }, []);
 
   return (
