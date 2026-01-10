@@ -333,9 +333,15 @@ fn get_github_token() -> String {
 }
 
 #[tauri::command]
-async fn enable_startup() -> Result<(), String> {
+async fn enable_startup(minimized: bool) -> Result<(), String> {
     let exe_path = current_exe().map_err(|e| e.to_string())?;
     let exe_str = exe_path.to_str().ok_or("Invalid path")?;
+
+    let task_run = if minimized {
+        format!("\"{}\" --minimized", exe_str)
+    } else {
+        format!("\"{}\"", exe_str)
+    };
 
     // /sc ONLOGON : Run when user logs on
     // /rl HIGHEST : Run with highest privileges (Admin)
@@ -348,7 +354,7 @@ async fn enable_startup() -> Result<(), String> {
             "/tn",
             "HotspotManager",
             "/tr",
-            &format!("\"{}\"", exe_str),
+            &task_run,
             "/sc",
             "ONLOGON",
             "/rl",
@@ -470,6 +476,23 @@ pub fn run() {
             std::thread::spawn(|| {
                 check_and_migrate_legacy_autostart();
             });
+
+            // Handle start minimized logic
+            let args: Vec<String> = std::env::args().collect();
+            // Check if "--minimized" is present in arguments
+            let start_minimized = args.iter().any(|arg| arg == "--minimized");
+
+            if let Some(window) = app.get_webview_window("main") {
+                if !start_minimized {
+                    println!("Starting normal (visible)");
+                    let _ = window.show();
+                    let _ = window.unminimize();
+                    let _ = window.set_focus();
+                } else {
+                    println!("Starting minimized to tray");
+                    // Window is already hidden by default config ("visible": false)
+                }
+            }
 
             let quit = MenuItem::with_id(app, "quit", "Çıkış", true, None::<&str>)?;
             let show = MenuItem::with_id(app, "show", "Pencereyi Göster", true, None::<&str>)?;

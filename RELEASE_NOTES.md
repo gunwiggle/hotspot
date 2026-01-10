@@ -1,7 +1,7 @@
-﻿# Hotspot Manager v0.5.20
+﻿# Hotspot Manager v0.5.21
 
 ## Yenilikler
 
 
 ## Notlar
-- Fixed build error by removing invalid capability and improved window restoration logic
+- Added 'Start Minimized to Tray' option dependent on 'Start with Windows'

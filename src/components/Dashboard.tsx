@@ -70,6 +70,7 @@ export function Dashboard() {
     const [showPassword, setShowPassword] = useState(false)
     const [isLoggingOut, setIsLoggingOut] = useState(false)
     const [autoStart, setAutoStart] = useState(false)
+    const [startMinimized, setStartMinimized] = useState(false)
     const [appVersion, setAppVersion] = useState<string>('...')
     const hasCheckedRef = useRef(false)
     const {
@@ -144,6 +145,10 @@ export function Dashboard() {
         // Check auto-start status on mount
         invoke<boolean>('is_startup_enabled').then(setAutoStart).catch(console.error)
         getVersion().then(setAppVersion).catch(console.error)
+
+        // Load start minimized preference
+        const storedMinimized = localStorage.getItem('start_minimized') === 'true'
+        setStartMinimized(storedMinimized)
     }, [])
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -171,13 +176,27 @@ export function Dashboard() {
     const handleAutoStartChange = async (checked: boolean) => {
         try {
             if (checked) {
-                await invoke('enable_startup')
+                await invoke('enable_startup', { minimized: startMinimized })
             } else {
                 await invoke('disable_startup')
             }
             setAutoStart(checked)
         } catch (error) {
             console.error('Failed to change autostart settings:', error)
+        }
+    }
+
+    const handleStartMinimizedChange = async (checked: boolean) => {
+        setStartMinimized(checked)
+        localStorage.setItem('start_minimized', String(checked))
+
+        // If auto-start is already enabled, update the task with new setting
+        if (autoStart) {
+            try {
+                await invoke('enable_startup', { minimized: checked })
+            } catch (error) {
+                console.error('Failed to update startup task:', error)
+            }
         }
     }
 
@@ -213,6 +232,22 @@ export function Dashboard() {
                                     onCheckedChange={handleAutoStartChange}
                                 />
                             </div>
+
+
+                            <div className="flex items-center justify-between opacity-transition transition-opacity duration-200" style={{ opacity: autoStart ? 1 : 0.5, pointerEvents: autoStart ? 'auto' : 'none' }}>
+                                <div className="space-y-0.5">
+                                    <Label>Sistem Tepsisinde Başlat</Label>
+                                    <p className="text-sm text-muted-foreground">
+                                        Windows ile başladığında pencereyi gizle
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={startMinimized}
+                                    onCheckedChange={handleStartMinimizedChange}
+                                    disabled={!autoStart}
+                                />
+                            </div>
+
                             <div className="flex items-center justify-between">
                                 <div className="space-y-0.5">
                                     <Label>Kapatma butonunda sistem tepsisine küçült</Label>
