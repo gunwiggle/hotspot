@@ -1,7 +1,7 @@
-﻿# Hotspot Manager v0.5.18
+﻿# Hotspot Manager v0.5.19
 
 ## Yenilikler
 
 
 ## Notlar
-- Added periodic background update checks (every 15 mins)
+- Fixed Single Instance Lock by adding missing 'single-instance:default' capability
