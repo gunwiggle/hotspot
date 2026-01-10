@@ -335,32 +335,32 @@ fn get_github_token() -> String {
 #[tauri::command]
 async fn enable_startup(minimized: bool) -> Result<(), String> {
     let exe_path = current_exe().map_err(|e| e.to_string())?;
-    let exe_str = exe_path.to_str().ok_or("Invalid path")?;
+    let raw_path = exe_path.to_str().ok_or("Invalid path")?;
+    // Strip the \\?\ prefix which can confuse PowerShell/schtasks
+    let exe_str = raw_path.strip_prefix("\\\\?\\").unwrap_or(raw_path);
 
+    // Careful quoting for schtasks /tr
+    // We want: /tr "\"C:\Path With Spaces\App.exe\" --minimized"
     let task_run = if minimized {
-        format!("\"{}\" --minimized", exe_str)
+        format!("\\\"{}\\\" --minimized", exe_str)
     } else {
-        format!("\"{}\"", exe_str)
+        format!("\\\"{}\\\"", exe_str)
     };
 
-    // /sc ONLOGON : Run when user logs on
-    // /rl HIGHEST : Run with highest privileges (Admin)
-    // /f : Force create
-    // /tn : Task Name
-    // /tr : Task Run
-    let output = Command::new("schtasks")
-        .args(&[
-            "/create",
-            "/tn",
-            "HotspotManager",
-            "/tr",
-            &task_run,
-            "/sc",
-            "ONLOGON",
-            "/rl",
-            "HIGHEST",
-            "/f",
-        ])
+    // Construct the argument list for schtasks
+    let schtasks_args = format!(
+        "/create /tn HotspotManager /tr \"{}\" /sc ONLOGON /rl HIGHEST /f",
+        task_run
+    );
+
+    // Execute via PowerShell Start-Process to trigger Admin prompt (RunAs)
+    let ps_command = format!(
+        "Start-Process schtasks -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList '{}'",
+        schtasks_args
+    );
+
+    let output = Command::new("powershell")
+        .args(&["-Command", &ps_command])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|e| e.to_string())?;
@@ -374,13 +374,14 @@ async fn enable_startup(minimized: bool) -> Result<(), String> {
 
 #[tauri::command]
 async fn disable_startup() -> Result<(), String> {
-    let _output = Command::new("schtasks")
-        .args(&["/delete", "/tn", "HotspotManager", "/f"])
+    let ps_command = "Start-Process schtasks -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList '/delete /tn HotspotManager /f'";
+
+    let output = Command::new("powershell")
+        .args(&["-Command", ps_command])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|e| e.to_string())?;
 
-    // We don't worry if it failed (e.g. didn't exist)
     Ok(())
 }
 

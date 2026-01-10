@@ -1,7 +1,7 @@
-﻿# Hotspot Manager v0.5.21
+﻿# Hotspot Manager v0.5.22
 
 ## Yenilikler
 
 
 ## Notlar
-- Added 'Start Minimized to Tray' option dependent on 'Start with Windows'
+- Fixed Access Denied error on startup toggle by adding UAC elevation prompt

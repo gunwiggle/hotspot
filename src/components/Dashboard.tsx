@@ -174,15 +174,20 @@ export function Dashboard() {
     }
 
     const handleAutoStartChange = async (checked: boolean) => {
+        // Optimistic update
+        setAutoStart(checked)
         try {
             if (checked) {
                 await invoke('enable_startup', { minimized: startMinimized })
             } else {
                 await invoke('disable_startup')
             }
-            setAutoStart(checked)
         } catch (error) {
             console.error('Failed to change autostart settings:', error)
+            // Revert on failure
+            setAutoStart(!checked)
+            // Show error to user (temporary until we verify fix)
+            alert(`Başlangıç ayarı değiştirilemedi: ${error}`)
         }
     }
 
