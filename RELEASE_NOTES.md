@@ -1,7 +1,7 @@
-﻿# Hotspot Manager v0.5.19
+﻿# Hotspot Manager v0.5.20
 
 ## Yenilikler
 
 
 ## Notlar
-- Fixed Single Instance Lock by adding missing 'single-instance:default' capability
+- Fixed build error by removing invalid capability and improved window restoration logic
