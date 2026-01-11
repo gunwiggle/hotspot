@@ -342,12 +342,23 @@ async fn enable_startup(_minimized: bool) -> Result<(), String> {
         .ok_or("Invalid parent")?
         .join("hotspot-launcher.exe");
 
-    let launcher_str = launcher_path.to_str().ok_or("Invalid path")?;
+    let raw_path = launcher_path.to_str().ok_or("Invalid path")?;
+    let launcher_str = raw_path.strip_prefix("\\\\?\\").unwrap_or(raw_path);
 
-    // 1. Create Windows Service
+    // 1. Delete existing service first (ignore errors if not exists)
+    let _ = Command::new("powershell")
+        .args(&["-Command", "Start-Process sc.exe -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList 'stop HotspotLauncher'"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+    let _ = Command::new("powershell")
+        .args(&["-Command", "Start-Process sc.exe -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList 'delete HotspotLauncher'"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+
+    // 2. Create Windows Service with clean path
     let create_args = format!(
-        "create HotspotLauncher binPath= \"{}\" start= auto DisplayName= \"Hotspot Manager Launcher\"",
-        launcher_str.replace("\\", "\\\\")
+        "create HotspotLauncher binPath= '\"{}\"' start= auto DisplayName= '\"Hotspot Manager Launcher\"'",
+        launcher_str
     );
 
     let ps_command = format!(
@@ -360,13 +371,13 @@ async fn enable_startup(_minimized: bool) -> Result<(), String> {
         .creation_flags(CREATE_NO_WINDOW)
         .output();
 
-    // 2. Start the service
+    // 3. Start the service
     let _ = Command::new("powershell")
         .args(&["-Command", "Start-Process sc.exe -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList 'start HotspotLauncher'"])
         .creation_flags(CREATE_NO_WINDOW)
         .output();
 
-    // 3. Cleanup legacy methods (Registry and Task Scheduler)
+    // 4. Cleanup legacy methods (Registry and Task Scheduler)
     let _ = disable_registry_startup();
     let _ = Command::new("powershell")
         .args(&["-Command", "Start-Process schtasks -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList '/delete /tn HotspotManager /f'"])

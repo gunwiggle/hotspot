@@ -1,7 +1,7 @@
-﻿# Hotspot Manager v0.5.30
+﻿# Hotspot Manager v0.5.31
 
 ## Yenilikler
 
 
 ## Notlar
-- Fixed Cargo default-run config for multi-binary project
+- Fixed service path prefix issue causing service startup failure
