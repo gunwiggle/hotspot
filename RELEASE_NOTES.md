@@ -1,7 +1,7 @@
-﻿# Hotspot Manager v0.5.50
+﻿# Hotspot Manager v0.5.51
 
 ## Yenilikler
 
 
 ## Notlar
-- Fix: Resolve startup crash due to logging permission denied in Program Files
+- Fix: Sync Frontend UI with Tray Icon status (resolve 'Checking...' hang and stuck Disconnected state)

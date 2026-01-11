@@ -9,7 +9,7 @@ use sysinfo::{System, SystemExt};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager,
+    Emitter, Manager,
 };
 
 pub struct AppState {
@@ -172,6 +172,7 @@ pub fn run() {
                     };
                     info!("Initial connection status: {}", status);
                     tray::update_tray_icon(&handle, status);
+                    let _ = handle.emit("network-status-update", is_connected);
                 });
             });
 

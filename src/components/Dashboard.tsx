@@ -111,6 +111,17 @@ export function Dashboard() {
     }, [status])
 
     useEffect(() => {
+        // Listen for backend network status updates (sync with tray)
+        import('@tauri-apps/api/event').then(({ listen }) => {
+            const unlisten = listen('network-status-update', (event) => {
+                const isConnected = event.payload as boolean
+                useHotspotStore.getState().setStatus(isConnected ? 'connected' : 'disconnected')
+            })
+            return () => { unlisten.then(f => f()) }
+        })
+    }, [])
+
+    useEffect(() => {
         getVersion().then(setAppVersion).catch(console.error)
     }, [])
 

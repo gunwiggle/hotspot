@@ -1,6 +1,6 @@
 [package]
 name = "hotspot"
-version = "0.5.50"
+version = "0.5.51"
 description = "Yurt interneti için otomatik giriş uygulaması"
 authors = ["you"]
 edition = "2021"
