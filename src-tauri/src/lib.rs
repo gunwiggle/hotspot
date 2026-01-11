@@ -1,5 +1,6 @@
 mod modules;
 
+use log::{error, info, LevelFilter};
 use modules::{auth, config, network, startup, tray};
 use simplelog::*;
 use std::fs::File;
@@ -37,8 +38,9 @@ fn get_github_token() -> String {
 }
 
 fn init_logging() {
+    // Use default config to avoid 'time' crate dependency issues for now
     let log_config = ConfigBuilder::new()
-        .set_time_format_custom(format_description!("[hour]:[minute]:[second]"))
+        .set_time_to_local(true) // Try local time if supported, else defaults to UTC
         .build();
 
     // Log to a file in the same directory as the executable (or temp if fails)
