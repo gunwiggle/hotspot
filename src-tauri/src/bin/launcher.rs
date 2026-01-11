@@ -71,6 +71,9 @@ fn run_service() -> Result<(), windows_service::Error> {
         process_id: None,
     })?;
 
+    // Spawn app immediately for current active session (in case user is already logged in)
+    spawn_for_active_session();
+
     loop {
         match shutdown_rx.recv_timeout(Duration::from_secs(1)) {
             Ok(_) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
@@ -89,6 +92,15 @@ fn run_service() -> Result<(), windows_service::Error> {
     })?;
 
     Ok(())
+}
+
+fn spawn_for_active_session() {
+    unsafe {
+        let active_session = WTSGetActiveConsoleSessionId();
+        if active_session != 0xFFFFFFFF {
+            spawn_app_for_session(active_session);
+        }
+    }
 }
 
 fn spawn_app_for_session(session_id: u32) {
@@ -121,7 +133,7 @@ fn spawn_app_for_session(session_id: u32) {
                     None,
                     None,
                     false,
-                    CREATE_UNICODE_ENVIRONMENT | CREATE_NO_WINDOW,
+                    CREATE_UNICODE_ENVIRONMENT,
                     Some(env_block),
                     None,
                     &si,

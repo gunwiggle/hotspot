@@ -1,7 +1,7 @@
-﻿# Hotspot Manager v0.5.32
+﻿# Hotspot Manager v0.5.33
 
 ## Yenilikler
 
 
 ## Notlar
-- Fixed service installation using batch file approach for reliable sc.exe execution
+- Fixed launcher: spawn app on service start and removed CREATE_NO_WINDOW flag
