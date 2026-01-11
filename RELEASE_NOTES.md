@@ -1,7 +1,7 @@
-﻿# Hotspot Manager v0.5.31
+﻿# Hotspot Manager v0.5.32
 
 ## Yenilikler
 
 
 ## Notlar
-- Fixed service path prefix issue causing service startup failure
+- Fixed service installation using batch file approach for reliable sc.exe execution

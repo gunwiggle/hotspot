@@ -2,6 +2,7 @@ use image::imageops::FilterType;
 use local_ip_address::local_ip;
 use serde::{Deserialize, Serialize};
 use std::env;
+use std::fs;
 use std::process::Command;
 use std::sync::Mutex;
 use sysinfo::{NetworkExt, System, SystemExt};
@@ -345,25 +346,27 @@ async fn enable_startup(_minimized: bool) -> Result<(), String> {
     let raw_path = launcher_path.to_str().ok_or("Invalid path")?;
     let launcher_str = raw_path.strip_prefix("\\\\?\\").unwrap_or(raw_path);
 
-    // 1. Delete existing service first (ignore errors if not exists)
-    let _ = Command::new("powershell")
-        .args(&["-Command", "Start-Process sc.exe -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList 'stop HotspotLauncher'"])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
-    let _ = Command::new("powershell")
-        .args(&["-Command", "Start-Process sc.exe -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList 'delete HotspotLauncher'"])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
+    // Create batch script for reliable execution
+    let temp_dir = std::env::temp_dir();
+    let batch_path = temp_dir.join("hotspot_service_install.bat");
 
-    // 2. Create Windows Service with clean path
-    let create_args = format!(
-        "create HotspotLauncher binPath= '\"{}\"' start= auto DisplayName= '\"Hotspot Manager Launcher\"'",
+    let batch_content = format!(
+        r#"@echo off
+sc stop HotspotLauncher >nul 2>&1
+sc delete HotspotLauncher >nul 2>&1
+sc create HotspotLauncher binPath= "{}" start= auto DisplayName= "Hotspot Manager Launcher"
+sc start HotspotLauncher
+"#,
         launcher_str
     );
 
+    std::fs::write(&batch_path, batch_content).map_err(|e| e.to_string())?;
+
+    // Run batch as Admin
+    let batch_path_str = batch_path.to_str().ok_or("Invalid batch path")?;
     let ps_command = format!(
-        "Start-Process sc.exe -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList '{}'",
-        create_args
+        "Start-Process cmd.exe -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList '/c \"{}\"'",
+        batch_path_str
     );
 
     let _ = Command::new("powershell")
@@ -371,13 +374,8 @@ async fn enable_startup(_minimized: bool) -> Result<(), String> {
         .creation_flags(CREATE_NO_WINDOW)
         .output();
 
-    // 3. Start the service
-    let _ = Command::new("powershell")
-        .args(&["-Command", "Start-Process sc.exe -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList 'start HotspotLauncher'"])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
-
-    // 4. Cleanup legacy methods (Registry and Task Scheduler)
+    // Cleanup
+    let _ = std::fs::remove_file(batch_path);
     let _ = disable_registry_startup();
     let _ = Command::new("powershell")
         .args(&["-Command", "Start-Process schtasks -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList '/delete /tn HotspotManager /f'"])
