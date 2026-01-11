@@ -1,7 +1,7 @@
-﻿# Hotspot Manager v0.5.40
+﻿# Hotspot Manager v0.5.41
 
 ## Yenilikler
 
 
 ## Notlar
-- Fixed tray icon: backend now checks connection on startup and updates tray
+- Added startInTray setting to persist user preference for minimized startup

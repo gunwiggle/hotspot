@@ -40,6 +40,7 @@ impl Default for Credentials {
 pub struct Settings {
     pub minimize_to_tray: bool,
     pub auto_reconnect: bool,
+    pub start_in_tray: bool,
 }
 
 impl Default for Settings {
@@ -47,6 +48,7 @@ impl Default for Settings {
         Self {
             minimize_to_tray: true,
             auto_reconnect: false,
+            start_in_tray: true,
         }
     }
 }
@@ -230,6 +232,7 @@ async fn save_settings(app: tauri::AppHandle, settings: Settings) -> Result<(), 
         serde_json::json!(settings.minimize_to_tray),
     );
     store.set("autoReconnect", serde_json::json!(settings.auto_reconnect));
+    store.set("startInTray", serde_json::json!(settings.start_in_tray));
     store.save().map_err(|e| e.to_string())?;
 
     let state = app.state::<AppState>();
@@ -237,8 +240,8 @@ async fn save_settings(app: tauri::AppHandle, settings: Settings) -> Result<(), 
         *cache = settings.clone();
     }
     println!(
-        "Settings saved and cached: minimize={}",
-        settings.minimize_to_tray
+        "Settings saved and cached: minimize={}, startInTray={}",
+        settings.minimize_to_tray, settings.start_in_tray
     );
 
     Ok(())
@@ -258,16 +261,25 @@ async fn load_settings(app: tauri::AppHandle) -> Result<Settings, String> {
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
+    let start_in_tray = store
+        .get("startInTray")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+
     let settings = Settings {
         minimize_to_tray,
         auto_reconnect,
+        start_in_tray,
     };
 
     let state = app.state::<AppState>();
     if let Ok(mut cache) = state.settings.lock() {
         *cache = settings.clone();
     }
-    println!("Settings loaded and cached: minimize={}", minimize_to_tray);
+    println!(
+        "Settings loaded and cached: minimize={}, startInTray={}",
+        minimize_to_tray, start_in_tray
+    );
 
     Ok(settings)
 }
@@ -530,41 +542,40 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState::default())
         .setup(|app| {
-            // Check for legacy registry keys and migrate them to Task Scheduler
             std::thread::spawn(|| {
                 check_and_migrate_legacy_autostart();
             });
 
-            // Handle start minimized logic
             let args: Vec<String> = std::env::args().collect();
-            // Check if "--minimized" is present in arguments
-            let start_minimized = args.iter().any(|arg| arg == "--minimized");
+            let has_minimized_flag = args.iter().any(|arg| arg == "--minimized");
+
+            // Load settings to check user preference
+            let should_minimize = if let Ok(settings) =
+                tauri::async_runtime::block_on(load_settings(app.handle().clone()))
+            {
+                println!(
+                    "Initial settings loaded: minimize={}, startInTray={}",
+                    settings.minimize_to_tray, settings.start_in_tray
+                );
+                has_minimized_flag && settings.start_in_tray
+            } else {
+                has_minimized_flag
+            };
 
             if let Some(window) = app.get_webview_window("main") {
-                if !start_minimized {
+                if !should_minimize {
                     println!("Starting normal (visible)");
                     let _ = window.show();
                     let _ = window.unminimize();
                     let _ = window.set_focus();
                 } else {
-                    println!("Starting minimized to tray");
-                    // Window is already hidden by default config ("visible": false)
+                    println!("Starting minimized to tray (user setting enabled)");
                 }
             }
 
             let quit = MenuItem::with_id(app, "quit", "Çıkış", true, None::<&str>)?;
             let show = MenuItem::with_id(app, "show", "Pencereyi Göster", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show, &quit])?;
-
-            // Initialize store and memory cache on startup
-            if let Ok(settings) =
-                tauri::async_runtime::block_on(load_settings(app.handle().clone()))
-            {
-                println!(
-                    "Initial settings loaded: minimize={}",
-                    settings.minimize_to_tray
-                );
-            }
 
             let _tray = TrayIconBuilder::with_id("main-tray")
                 .icon(app.default_window_icon().unwrap().clone())

@@ -10,6 +10,7 @@ export interface Settings {
     minimizeToTray: boolean
     autoReconnect: boolean
     privacyMode: boolean
+    startInTray: boolean
 }
 
 export interface SpeedTestResult {

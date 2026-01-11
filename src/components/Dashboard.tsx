@@ -70,7 +70,6 @@ export function Dashboard() {
     const [showPassword, setShowPassword] = useState(false)
     const [isLoggingOut, setIsLoggingOut] = useState(false)
     const [autoStart, setAutoStart] = useState(false)
-    const [startMinimized, setStartMinimized] = useState(false)
     const [appVersion, setAppVersion] = useState<string>('...')
     const hasCheckedRef = useRef(false)
     const {
@@ -142,13 +141,8 @@ export function Dashboard() {
     }, [status])
 
     useEffect(() => {
-        // Check auto-start status on mount
         invoke<boolean>('is_startup_enabled').then(setAutoStart).catch(console.error)
         getVersion().then(setAppVersion).catch(console.error)
-
-        // Load start minimized preference
-        const storedMinimized = localStorage.getItem('start_minimized') === 'true'
-        setStartMinimized(storedMinimized)
     }, [])
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -178,7 +172,7 @@ export function Dashboard() {
         setAutoStart(checked)
         try {
             if (checked) {
-                await invoke('enable_startup', { minimized: startMinimized })
+                await invoke('enable_startup', { minimized: settings.startInTray })
             } else {
                 await invoke('disable_startup')
             }
@@ -192,17 +186,7 @@ export function Dashboard() {
     }
 
     const handleStartMinimizedChange = async (checked: boolean) => {
-        setStartMinimized(checked)
-        localStorage.setItem('start_minimized', String(checked))
-
-        // If auto-start is already enabled, update the task with new setting
-        if (autoStart) {
-            try {
-                await invoke('enable_startup', { minimized: checked })
-            } catch (error) {
-                console.error('Failed to update startup task:', error)
-            }
-        }
+        handleSettingsChange('startInTray', checked)
     }
 
     if (isSettingsOpen) {
@@ -247,7 +231,7 @@ export function Dashboard() {
                                     </p>
                                 </div>
                                 <Switch
-                                    checked={startMinimized}
+                                    checked={settings.startInTray}
                                     onCheckedChange={handleStartMinimizedChange}
                                     disabled={!autoStart}
                                 />
