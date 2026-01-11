@@ -4,4 +4,4 @@
 
 
 ## Notlar
-- Migrated startup mechanism from Windows Task Scheduler to Registry (Run key) for faster and more reliable startup
+- Fixed build error: Corrected implementation of is_startup_enabled for Registry check

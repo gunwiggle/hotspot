@@ -2,8 +2,6 @@ use image::imageops::FilterType;
 use local_ip_address::local_ip;
 use serde::{Deserialize, Serialize};
 use std::env;
-use winreg::{RegKey, enums::*};
-use std::fs;
 use std::process::Command;
 use std::sync::Mutex;
 use sysinfo::{NetworkExt, System, SystemExt};
@@ -14,6 +12,7 @@ use tauri::{
     Manager,
 };
 use tauri_plugin_store::StoreExt;
+use winreg::{enums::*, RegKey};
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -341,7 +340,7 @@ async fn enable_startup(minimized: bool) -> Result<(), String> {
     let raw_path = exe_path.to_str().ok_or("Invalid path")?;
     // Strip the \\?\ prefix for registry compatibility
     let exe_str = raw_path.strip_prefix("\\\\?\\").unwrap_or(raw_path);
-    
+
     let args = if minimized { " --minimized" } else { "" };
     // Quote the executable path to handle spaces safely
     let command = format!("\"{}\"{}", exe_str, args);
@@ -350,8 +349,9 @@ async fn enable_startup(minimized: bool) -> Result<(), String> {
     let path = r"Software\Microsoft\Windows\CurrentVersion\Run";
     let (key, _) = hkcu.create_subkey(path).map_err(|e| e.to_string())?;
 
-    key.set_value("HotspotManager", &command).map_err(|e| e.to_string())?;
-    
+    key.set_value("HotspotManager", &command)
+        .map_err(|e| e.to_string())?;
+
     Ok(())
 }
 
@@ -359,7 +359,9 @@ async fn enable_startup(minimized: bool) -> Result<(), String> {
 async fn disable_startup() -> Result<(), String> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let path = r"Software\Microsoft\Windows\CurrentVersion\Run";
-    let key = hkcu.open_subkey_with_flags(path, KEY_WRITE).map_err(|e| e.to_string())?;
+    let key = hkcu
+        .open_subkey_with_flags(path, KEY_WRITE)
+        .map_err(|e| e.to_string())?;
 
     // Ignore error if value doesn't exist
     let _ = key.delete_value("HotspotManager");
@@ -369,14 +371,15 @@ async fn disable_startup() -> Result<(), String> {
 
 #[tauri::command]
 async fn is_startup_enabled() -> bool {
-        .args(&["/query", "/tn", "HotspotManager"])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let path = r"Software\Microsoft\Windows\CurrentVersion\Run";
 
-    match output {
-        Ok(o) => o.status.success(),
-        Err(_) => false,
+    if let Ok(key) = hkcu.open_subkey_with_flags(path, KEY_READ) {
+        let result: Result<String, _> = key.get_value("HotspotManager");
+        return result.is_ok();
     }
+
+    false
 }
 
 fn check_and_migrate_legacy_autostart() {
