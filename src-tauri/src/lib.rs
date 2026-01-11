@@ -336,31 +336,57 @@ fn get_github_token() -> String {
 async fn enable_startup(minimized: bool) -> Result<(), String> {
     let exe_path = current_exe().map_err(|e| e.to_string())?;
     let raw_path = exe_path.to_str().ok_or("Invalid path")?;
-    // Strip the \\?\ prefix which can confuse PowerShell/schtasks
+    // Strip the \\?\ prefix which can confuse PowerShell usage
     let exe_str = raw_path.strip_prefix("\\\\?\\").unwrap_or(raw_path);
 
-    // Careful quoting for schtasks /tr
-    // We want: /tr "\"C:\Path With Spaces\App.exe\" --minimized"
-    let task_run = if minimized {
-        format!("\\\"{}\\\" --minimized", exe_str)
-    } else {
-        format!("\\\"{}\\\"", exe_str)
-    };
+    // Get working directory (parent of executable)
+    let cwd_path = exe_path.parent().ok_or("Invalid parent dir")?;
+    let raw_cwd = cwd_path.to_str().ok_or("Invalid cwd path")?;
+    let cwd_str = raw_cwd.strip_prefix("\\\\?\\").unwrap_or(raw_cwd);
 
-    // Construct the argument list for schtasks
-    let schtasks_args = format!(
-        "/create /tn HotspotManager /tr \"{}\" /sc ONLOGON /rl HIGHEST /f",
-        task_run
+    // Escape single quotes for PowerShell (replace ' with '')
+    let safe_exe = exe_str.replace("'", "''");
+    let safe_cwd = cwd_str.replace("'", "''");
+
+    let args = if minimized { "--minimized" } else { "" };
+
+    // Construct the PowerShell script to run as admin
+    // We use ; to separate commands on the same line
+    let ps_script = format!(
+        "$A = New-ScheduledTaskAction -Execute '{}' -Argument '{}' -WorkingDirectory '{}'; \
+         $T = New-ScheduledTaskTrigger -AtLogOn; \
+         $P = New-ScheduledTaskPrincipal -UserId (Whoami) -RunLevel Highest; \
+         $S = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Seconds 0); \
+         Register-ScheduledTask -TaskName 'HotspotManager' -Action $A -Trigger $T -Principal $P -Settings $S -Force",
+        safe_exe, args, safe_cwd
     );
 
-    // Execute via PowerShell Start-Process to trigger Admin prompt (RunAs)
-    let ps_command = format!(
-        "Start-Process schtasks -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList '{}'",
-        schtasks_args
+    // Call PowerShell to run this script with Elevation (RunAs)
+    // We wrap the script in quotes for the inner -Command
+    let command_arg = format!("& {{ {} }}", ps_script);
+
+    // We construct the outer Start-Process command
+    // Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command & { ... }" -Verb RunAs
+
+    // Using a different approach to avoid quoting hell:
+    // We create a temporary logical command string for ArgumentList
+    let inner_args = format!(
+        "-NoProfile -ExecutionPolicy Bypass -Command \"{}\"",
+        command_arg.replace("\"", "\\\"")
     );
 
     let output = Command::new("powershell")
-        .args(&["-Command", &ps_command])
+        .args(&[
+            "Start-Process",
+            "powershell",
+            "-Verb",
+            "RunAs",
+            "-WindowStyle",
+            "Hidden",
+            "-Wait",
+            "-ArgumentList",
+            &format!("'{}'", inner_args),
+        ])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|e| e.to_string())?;
