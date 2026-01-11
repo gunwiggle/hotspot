@@ -111,8 +111,9 @@ fn spawn_app_for_session(session_id: u32) {
             let exe_path = get_hotspot_exe_path();
 
             if let Some(path) = exe_path {
-                let mut path_wide: Vec<u16> =
-                    path.encode_utf16().chain(std::iter::once(0)).collect();
+                let cmd_line = format!("\"{}\" --minimized", path);
+                let mut cmd_wide: Vec<u16> =
+                    cmd_line.encode_utf16().chain(std::iter::once(0)).collect();
 
                 let desktop_str = "winsta0\\default\0";
                 let mut desktop_wide: Vec<u16> = desktop_str.encode_utf16().collect();
@@ -129,7 +130,7 @@ fn spawn_app_for_session(session_id: u32) {
                 let _ = CreateProcessAsUserW(
                     Some(user_token),
                     None,
-                    Some(PWSTR(path_wide.as_mut_ptr())),
+                    Some(PWSTR(cmd_wide.as_mut_ptr())),
                     None,
                     None,
                     false,

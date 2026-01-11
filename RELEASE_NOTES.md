@@ -1,7 +1,7 @@
-﻿# Hotspot Manager v0.5.36
+﻿# Hotspot Manager v0.5.37
 
 ## Yenilikler
 
 
 ## Notlar
-- Fixed tray icon showing default on startup - now checks connection immediately
+- Fixed launcher to pass --minimized flag for tray startup
