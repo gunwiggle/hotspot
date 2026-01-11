@@ -39,9 +39,7 @@ fn get_github_token() -> String {
 
 fn init_logging() {
     // Use default config to avoid 'time' crate dependency issues for now
-    let log_config = ConfigBuilder::new()
-        .set_time_to_local(true) // Try local time if supported, else defaults to UTC
-        .build();
+    let log_config = ConfigBuilder::new().build();
 
     // Log to a file in the same directory as the executable (or temp if fails)
     let log_path = if let Ok(exe_path) = std::env::current_exe() {
