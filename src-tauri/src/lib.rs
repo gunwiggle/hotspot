@@ -2,7 +2,6 @@ use image::imageops::FilterType;
 use local_ip_address::local_ip;
 use serde::{Deserialize, Serialize};
 use std::env;
-use std::fs;
 use std::process::Command;
 use std::sync::Mutex;
 use sysinfo::{NetworkExt, System, SystemExt};
@@ -336,114 +335,43 @@ fn get_github_token() -> String {
 }
 
 #[tauri::command]
-async fn enable_startup(minimized: bool) -> Result<(), String> {
+async fn enable_startup(_minimized: bool) -> Result<(), String> {
     let exe_path = current_exe().map_err(|e| e.to_string())?;
-    let raw_path = exe_path.to_str().ok_or("Invalid path")?;
-    let exe_str = raw_path.strip_prefix("\\\\?\\").unwrap_or(raw_path);
+    let launcher_path = exe_path
+        .parent()
+        .ok_or("Invalid parent")?
+        .join("hotspot-launcher.exe");
 
-    let cwd_path = exe_path.parent().ok_or("Invalid parent dir")?;
-    let raw_cwd = cwd_path.to_str().ok_or("Invalid cwd path")?;
-    let cwd_str = raw_cwd.strip_prefix("\\\\?\\").unwrap_or(raw_cwd);
+    let launcher_str = launcher_path.to_str().ok_or("Invalid path")?;
 
-    let args = if minimized { "--minimized" } else { "" };
-
-    // 1. Get Current User (Domain\User) for the Task Principal
-    let user_output = Command::new("whoami")
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map_err(|e| format!("Failed to get user: {}", e))?;
-    let user_id = String::from_utf8_lossy(&user_output.stdout)
-        .trim()
-        .to_string();
-
-    // 2. Construct XML Content
-    // Priority 2 = High Priority (wins against Normal 4-6)
-    // ExecutionTimeLimit PT0S = Unlimited
-    // DisallowStartIfOnBatteries = false -> Crucial for laptops
-    let xml_content = format!(
-        r#"<?xml version="1.0" encoding="UTF-16"?>
-<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
-  <RegistrationInfo>
-    <Description>Hotspot Manager Auto-Start (High Priority)</Description>
-  </RegistrationInfo>
-  <Triggers>
-    <LogonTrigger>
-      <Enabled>true</Enabled>
-      <UserId>{}</UserId>
-    </LogonTrigger>
-  </Triggers>
-  <Principals>
-    <Principal id="Author">
-      <UserId>{}</UserId>
-      <LogonType>InteractiveToken</LogonType>
-      <RunLevel>HighestAvailable</RunLevel>
-    </Principal>
-  </Principals>
-  <Settings>
-    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
-    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
-    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
-    <AllowHardTerminate>true</AllowHardTerminate>
-    <StartWhenAvailable>true</StartWhenAvailable>
-    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
-    <IdleSettings>
-      <StopOnIdleEnd>true</StopOnIdleEnd>
-      <RestartOnIdle>false</RestartOnIdle>
-    </IdleSettings>
-    <AllowStartOnDemand>true</AllowStartOnDemand>
-    <Enabled>true</Enabled>
-    <Hidden>false</Hidden>
-    <RunOnlyIfIdle>false</RunOnlyIfIdle>
-    <WakeToRun>false</WakeToRun>
-    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
-    <Priority>2</Priority>
-  </Settings>
-  <Actions Context="Author">
-    <Exec>
-      <Command>{}</Command>
-      <Arguments>{}</Arguments>
-      <WorkingDirectory>{}</WorkingDirectory>
-    </Exec>
-  </Actions>
-</Task>"#,
-        user_id, user_id, exe_str, args, cwd_str
+    // 1. Create Windows Service
+    let create_args = format!(
+        "create HotspotLauncher binPath= \"{}\" start= auto DisplayName= \"Hotspot Manager Launcher\"",
+        launcher_str.replace("\\", "\\\\")
     );
 
-    // 3. Write XML to Temp File (UTF-16 LE is standard for Windows XML, but schtasks usually accepts UTF-8 for basic ASCII content.
-    // However, to be safe with special chars in paths, we stick to standard Rust UTF-8 file writing.
-    // Schtasks supports UTF-8 XML if it doesn't have a BOM or has specific encoding decl.
-    // We set encoding="UTF-16" in header but write UTF-8.
-    // Actually, it's safer to *remove* the encoding declaration if we write UTF-8, OR use UTF-16.
-    // Let's remove encoding attribute to let parser detect.)
-    let xml_clean = xml_content.replace("encoding=\"UTF-16\"", ""); // Simple hack
-
-    let temp_dir = env::temp_dir();
-    let xml_path = temp_dir.join("hotspot_startup.xml");
-    fs::write(&xml_path, xml_clean).map_err(|e| e.to_string())?;
-    let xml_path_str = xml_path.to_str().ok_or("Invalid XML path")?;
-
-    // 4. Register Task via PowerShell Start-Process (RunAs Admin)
-    // schtasks /create /tn "HotspotManager" /xml "path" /f
     let ps_command = format!(
-        "Start-Process schtasks -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList '/create /tn HotspotManager /xml \"{}\" /f'",
-        xml_path_str
+        "Start-Process sc.exe -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList '{}'",
+        create_args
     );
 
-    let output = Command::new("powershell")
+    let _ = Command::new("powershell")
         .args(&["-Command", &ps_command])
         .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map_err(|e| e.to_string())?;
+        .output();
 
-    // 5. Cleanup Registry Key (Migration from v0.5.25)
+    // 2. Start the service
+    let _ = Command::new("powershell")
+        .args(&["-Command", "Start-Process sc.exe -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList 'start HotspotLauncher'"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+
+    // 3. Cleanup legacy methods (Registry and Task Scheduler)
     let _ = disable_registry_startup();
-
-    // 6. Cleanup Temp File
-    let _ = fs::remove_file(xml_path);
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
+    let _ = Command::new("powershell")
+        .args(&["-Command", "Start-Process schtasks -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList '/delete /tn HotspotManager /f'"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
 
     Ok(())
 }
@@ -516,73 +444,6 @@ async fn is_startup_enabled() -> bool {
     }
 
     false
-}
-
-#[tauri::command]
-async fn install_service() -> Result<(), String> {
-    let exe_path = current_exe().map_err(|e| e.to_string())?;
-    let launcher_path = exe_path
-        .parent()
-        .ok_or("Invalid parent")?
-        .join("hotspot-launcher.exe");
-
-    let launcher_str = launcher_path.to_str().ok_or("Invalid path")?;
-
-    // Create service using sc.exe (requires admin)
-    let create_args = format!(
-        "create HotspotLauncher binPath= \"{}\" start= auto DisplayName= \"Hotspot Manager Launcher\"",
-        launcher_str
-    );
-
-    let ps_command = format!(
-        "Start-Process sc.exe -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList '{}'",
-        create_args
-    );
-
-    let output = Command::new("powershell")
-        .args(&["-Command", &ps_command])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    // Start the service
-    let _ = Command::new("powershell")
-        .args(&["-Command", "Start-Process sc.exe -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList 'start HotspotLauncher'"])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
-
-    // Cleanup old methods
-    let _ = disable_registry_startup();
-    let _ = Command::new("powershell")
-        .args(&["-Command", "Start-Process schtasks -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList '/delete /tn HotspotManager /f'"])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
-
-    Ok(())
-}
-
-#[tauri::command]
-async fn uninstall_service() -> Result<(), String> {
-    let _ = Command::new("powershell")
-        .args(&["-Command", "Start-Process sc.exe -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList 'stop HotspotLauncher'"])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
-
-    let output = Command::new("powershell")
-        .args(&["-Command", "Start-Process sc.exe -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList 'delete HotspotLauncher'"])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    Ok(())
 }
 
 fn check_and_migrate_legacy_autostart() {
@@ -781,9 +642,7 @@ pub fn run() {
             get_github_token,
             enable_startup,
             disable_startup,
-            is_startup_enabled,
-            install_service,
-            uninstall_service
+            is_startup_enabled
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

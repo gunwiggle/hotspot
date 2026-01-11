@@ -1,7 +1,7 @@
-﻿# Hotspot Manager v0.5.28
+﻿# Hotspot Manager v0.5.29
 
 ## Yenilikler
 
 
 ## Notlar
-- Added Windows Service launcher for ultra-fast startup before other apps
+- Simplified UX: 'Start with Windows' toggle now automatically installs/uninstalls Windows Service
