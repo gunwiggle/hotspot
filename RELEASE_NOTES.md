@@ -1,7 +1,7 @@
-﻿# Hotspot Manager v0.5.44
+﻿# Hotspot Manager v0.5.45
 
 ## Yenilikler
 
 
 ## Notlar
-- Fixed update checking rate limit logic
+- Backend refactoring and logging

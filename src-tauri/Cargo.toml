@@ -45,6 +45,9 @@ windows = { version = "0.62.2", features = [
 tauri-plugin-single-instance = "2.3.7"
 winreg = "0.52"
 windows-service = "0.7"
+log = "0.4"
+simplelog = "0.12"
+chrono = "0.4"
 
 [[bin]]
 name = "hotspot-launcher"
