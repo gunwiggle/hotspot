@@ -1,7 +1,7 @@
-﻿# Hotspot Manager v0.5.23
+﻿# Hotspot Manager v0.5.24
 
 ## Yenilikler
 
 
 ## Notlar
-- Fixed startup issues by ensuring Task Scheduler power settings allow execution on battery and setting correct Working Directory
+- Fixed PowerShell argument parsing by using temp script file execution

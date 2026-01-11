@@ -1,6 +1,8 @@
 use image::imageops::FilterType;
 use local_ip_address::local_ip;
 use serde::{Deserialize, Serialize};
+use std::env;
+use std::fs;
 use std::process::Command;
 use std::sync::Mutex;
 use sysinfo::{NetworkExt, System, SystemExt};
@@ -336,60 +338,50 @@ fn get_github_token() -> String {
 async fn enable_startup(minimized: bool) -> Result<(), String> {
     let exe_path = current_exe().map_err(|e| e.to_string())?;
     let raw_path = exe_path.to_str().ok_or("Invalid path")?;
-    // Strip the \\?\ prefix which can confuse PowerShell usage
     let exe_str = raw_path.strip_prefix("\\\\?\\").unwrap_or(raw_path);
-
-    // Get working directory (parent of executable)
+    
     let cwd_path = exe_path.parent().ok_or("Invalid parent dir")?;
     let raw_cwd = cwd_path.to_str().ok_or("Invalid cwd path")?;
     let cwd_str = raw_cwd.strip_prefix("\\\\?\\").unwrap_or(raw_cwd);
 
-    // Escape single quotes for PowerShell (replace ' with '')
-    let safe_exe = exe_str.replace("'", "''");
-    let safe_cwd = cwd_str.replace("'", "''");
-
     let args = if minimized { "--minimized" } else { "" };
 
-    // Construct the PowerShell script to run as admin
-    // We use ; to separate commands on the same line
+    // Create a robust PowerShell script
+    // Note: We avoid manual quoting hell by using variables in the script content directly
     let ps_script = format!(
-        "$A = New-ScheduledTaskAction -Execute '{}' -Argument '{}' -WorkingDirectory '{}'; \
-         $T = New-ScheduledTaskTrigger -AtLogOn; \
-         $P = New-ScheduledTaskPrincipal -UserId (Whoami) -RunLevel Highest; \
-         $S = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Seconds 0); \
-         Register-ScheduledTask -TaskName 'HotspotManager' -Action $A -Trigger $T -Principal $P -Settings $S -Force",
-        safe_exe, args, safe_cwd
+        "$Action = New-ScheduledTaskAction -Execute '{}' -Argument '{}' -WorkingDirectory '{}'; \
+         $Trigger = New-ScheduledTaskTrigger -AtLogOn; \
+         $Principal = New-ScheduledTaskPrincipal -UserId (Whoami) -RunLevel Highest; \
+         $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Seconds 0); \
+         Register-ScheduledTask -TaskName 'HotspotManager' -Action $Action -Trigger $Trigger -Principal $Principal -Settings $Settings -Force",
+        exe_str.replace("'", "''"), 
+        args, 
+        cwd_str.replace("'", "''")
     );
 
-    // Call PowerShell to run this script with Elevation (RunAs)
-    // We wrap the script in quotes for the inner -Command
-    let command_arg = format!("& {{ {} }}", ps_script);
+    // Write to a temporary file
+    let temp_dir = env::temp_dir();
+    let script_path = temp_dir.join("enable_hotspot_startup.ps1");
+    fs::write(&script_path, ps_script).map_err(|e| e.to_string())?;
+    let script_path_str = script_path.to_str().ok_or("Invalid script path")?;
 
-    // We construct the outer Start-Process command
-    // Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command & { ... }" -Verb RunAs
-
-    // Using a different approach to avoid quoting hell:
-    // We create a temporary logical command string for ArgumentList
-    let inner_args = format!(
-        "-NoProfile -ExecutionPolicy Bypass -Command \"{}\"",
-        command_arg.replace("\"", "\\\"")
-    );
-
+    // Execute the script with RunAs (Admin)
     let output = Command::new("powershell")
         .args(&[
             "Start-Process",
             "powershell",
-            "-Verb",
-            "RunAs",
-            "-WindowStyle",
-            "Hidden",
+            "-Verb", "RunAs",
+            "-WindowStyle", "Hidden",
             "-Wait",
             "-ArgumentList",
-            &format!("'{}'", inner_args),
+            &format!("\"-NoProfile -ExecutionPolicy Bypass -File '{}'\"", script_path_str) // Simple quoting
         ])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|e| e.to_string())?;
+
+    // Clean up temp file
+    let _ = fs::remove_file(script_path);
 
     if !output.status.success() {
         return Err(String::from_utf8_lossy(&output.stderr).to_string());
@@ -400,13 +392,28 @@ async fn enable_startup(minimized: bool) -> Result<(), String> {
 
 #[tauri::command]
 async fn disable_startup() -> Result<(), String> {
-    let ps_command = "Start-Process schtasks -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList '/delete /tn HotspotManager /f'";
+    let ps_script = "Unregister-ScheduledTask -TaskName 'HotspotManager' -Confirm:$false -ErrorAction SilentlyContinue";
 
-    let output = Command::new("powershell")
-        .args(&["-Command", ps_command])
+    let temp_dir = env::temp_dir();
+    let script_path = temp_dir.join("disable_hotspot_startup.ps1");
+    fs::write(&script_path, ps_script).map_err(|e| e.to_string())?;
+    let script_path_str = script_path.to_str().ok_or("Invalid script path")?;
+
+    let _output = Command::new("powershell")
+        .args(&[
+            "Start-Process",
+            "powershell",
+            "-Verb", "RunAs",
+            "-WindowStyle", "Hidden",
+            "-Wait",
+            "-ArgumentList",
+            &format!("\"-NoProfile -ExecutionPolicy Bypass -File '{}'\"", script_path_str)
+        ])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|e| e.to_string())?;
+
+    let _ = fs::remove_file(script_path);
 
     Ok(())
 }
