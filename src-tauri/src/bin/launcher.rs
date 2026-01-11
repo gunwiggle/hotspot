@@ -2,11 +2,13 @@
 
 use std::env;
 use std::ffi::OsString;
+use std::fs::File;
 use std::path::PathBuf;
-
 use std::sync::mpsc;
 use std::time::Duration;
 
+use log::{error, info, warn};
+use simplelog::{Config, LevelFilter, WriteLogger};
 use windows_service::{
     define_windows_service,
     service::{
@@ -28,28 +30,51 @@ const SERVICE_TYPE: ServiceType = ServiceType::OWN_PROCESS;
 define_windows_service!(ffi_service_main, service_main);
 
 fn main() -> Result<(), windows_service::Error> {
-    service_dispatcher::start(SERVICE_NAME, ffi_service_main)?;
-    Ok(())
+    init_logging();
+    info!("Launcher starting...");
+    let result = service_dispatcher::start(SERVICE_NAME, ffi_service_main);
+    if let Err(e) = &result {
+        error!("Failed to start service dispatcher: {:?}", e);
+    }
+    result
+}
+
+fn init_logging() {
+    let mut path = std::env::temp_dir();
+    path.push("hotspot_launcher.log");
+
+    if let Ok(file) = File::create(&path) {
+        let _ = WriteLogger::init(LevelFilter::Info, Config::default(), file);
+        info!("Logging initialized at {:?}", path);
+    }
 }
 
 fn service_main(_arguments: Vec<OsString>) {
+    info!("Service main entry point");
     if let Err(e) = run_service() {
-        eprintln!("Service error: {:?}", e);
+        error!("Service error: {:?}", e);
     }
 }
 
 fn run_service() -> Result<(), windows_service::Error> {
+    info!("Running service logic");
     let (shutdown_tx, shutdown_rx) = mpsc::channel();
 
     let event_handler = move |control_event| -> ServiceControlHandlerResult {
         match control_event {
             ServiceControl::Stop => {
+                info!("Received Stop event");
                 let _ = shutdown_tx.send(());
                 ServiceControlHandlerResult::NoError
             }
             ServiceControl::SessionChange(param) => {
+                info!(
+                    "Received SessionChange event: reason={:?} session={}",
+                    param.reason, param.notification.session_id
+                );
                 if param.reason == windows_service::service::SessionChangeReason::SessionLogon {
                     let session_id = param.notification.session_id;
+                    info!("SessionLogon detected for session {}", session_id);
                     spawn_app_for_session(session_id);
                 }
                 ServiceControlHandlerResult::NoError
@@ -71,12 +96,17 @@ fn run_service() -> Result<(), windows_service::Error> {
         process_id: None,
     })?;
 
+    info!("Service status set to RUNNING");
+
     // Spawn app immediately for current active session (in case user is already logged in)
     spawn_for_active_session();
 
     loop {
         match shutdown_rx.recv_timeout(Duration::from_secs(1)) {
-            Ok(_) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            Ok(_) | Err(mpsc::RecvTimeoutError::Disconnected) => {
+                info!("Shutdown signal received or channel disconnected");
+                break;
+            }
             Err(mpsc::RecvTimeoutError::Timeout) => {}
         }
     }
@@ -91,26 +121,36 @@ fn run_service() -> Result<(), windows_service::Error> {
         process_id: None,
     })?;
 
+    info!("Service stopped");
     Ok(())
 }
 
 fn spawn_for_active_session() {
     unsafe {
         let active_session = WTSGetActiveConsoleSessionId();
+        info!("Current active console session ID: {}", active_session);
         if active_session != 0xFFFFFFFF {
             spawn_app_for_session(active_session);
+        } else {
+            info!("No active console session found");
         }
     }
 }
 
 fn spawn_app_for_session(session_id: u32) {
+    info!("Attempting to spawn app for session {}", session_id);
     unsafe {
         let mut user_token: HANDLE = HANDLE::default();
 
         if WTSQueryUserToken(session_id, &mut user_token).is_ok() {
+            info!(
+                "Successfully obtained user token for session {}",
+                session_id
+            );
             let exe_path = get_hotspot_exe_path();
 
             if let Some(path) = exe_path {
+                info!("Target executable path: {}", path);
                 let cmd_line = format!("\"{}\" --minimized", path);
                 let mut cmd_wide: Vec<u16> =
                     cmd_line.encode_utf16().chain(std::iter::once(0)).collect();
@@ -125,9 +165,13 @@ fn spawn_app_for_session(session_id: u32) {
                 let mut pi = PROCESS_INFORMATION::default();
 
                 let mut env_block: *mut std::ffi::c_void = std::ptr::null_mut();
-                let _ = CreateEnvironmentBlock(&mut env_block, Some(user_token), false);
+                if CreateEnvironmentBlock(&mut env_block, Some(user_token), false).is_ok() {
+                    info!("Environment block created");
+                } else {
+                    warn!("Failed to create environment block");
+                }
 
-                let _ = CreateProcessAsUserW(
+                let result = CreateProcessAsUserW(
                     Some(user_token),
                     None,
                     Some(PWSTR(cmd_wide.as_mut_ptr())),
@@ -141,19 +185,28 @@ fn spawn_app_for_session(session_id: u32) {
                     &mut pi,
                 );
 
+                if let Err(e) = result {
+                    error!("CreateProcessAsUserW failed. Error: {:?}", e);
+                } else {
+                    info!("CreateProcessAsUserW succeeded. PID: {:?}", pi.dwProcessId);
+                    let _ = CloseHandle(pi.hProcess);
+                    let _ = CloseHandle(pi.hThread);
+                }
+
                 if !env_block.is_null() {
                     let _ = DestroyEnvironmentBlock(env_block);
                 }
-
-                if !pi.hProcess.is_invalid() {
-                    let _ = CloseHandle(pi.hProcess);
-                }
-                if !pi.hThread.is_invalid() {
-                    let _ = CloseHandle(pi.hThread);
-                }
+            } else {
+                error!("Could not find hotspot.exe path");
             }
 
             let _ = CloseHandle(user_token);
+        } else {
+            let error = GetLastError();
+            warn!(
+                "Failed to query user token for session {}. Error: {:?}",
+                session_id, error
+            );
         }
     }
 }

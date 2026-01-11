@@ -1,6 +1,6 @@
 use image::imageops::FilterType;
 use tauri::image::Image;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 pub fn update_tray_icon(app: &AppHandle, status: &str) {
     if let Some(tray) = app.tray_by_id("main-tray") {

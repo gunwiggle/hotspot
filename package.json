@@ -1,7 +1,7 @@
 {
   "name": "hotspot",
   "private": true,
-  "version": "0.5.47",
+  "version": "0.5.48",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -43,57 +43,3 @@
     "vite": "^7.0.4"
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
