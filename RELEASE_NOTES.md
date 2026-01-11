@@ -1,7 +1,7 @@
-﻿# Hotspot Manager v0.5.41
+﻿# Hotspot Manager v0.5.42
 
 ## Yenilikler
 
 
 ## Notlar
-- Added startInTray setting to persist user preference for minimized startup
+- Added debug logging for initial tray icon update
