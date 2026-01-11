@@ -2,6 +2,7 @@ use image::imageops::FilterType;
 use local_ip_address::local_ip;
 use serde::{Deserialize, Serialize};
 use std::env;
+use winreg::{RegKey, enums::*};
 use std::fs;
 use std::process::Command;
 use std::sync::Mutex;
@@ -338,89 +339,36 @@ fn get_github_token() -> String {
 async fn enable_startup(minimized: bool) -> Result<(), String> {
     let exe_path = current_exe().map_err(|e| e.to_string())?;
     let raw_path = exe_path.to_str().ok_or("Invalid path")?;
+    // Strip the \\?\ prefix for registry compatibility
     let exe_str = raw_path.strip_prefix("\\\\?\\").unwrap_or(raw_path);
     
-    let cwd_path = exe_path.parent().ok_or("Invalid parent dir")?;
-    let raw_cwd = cwd_path.to_str().ok_or("Invalid cwd path")?;
-    let cwd_str = raw_cwd.strip_prefix("\\\\?\\").unwrap_or(raw_cwd);
+    let args = if minimized { " --minimized" } else { "" };
+    // Quote the executable path to handle spaces safely
+    let command = format!("\"{}\"{}", exe_str, args);
 
-    let args = if minimized { "--minimized" } else { "" };
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let path = r"Software\Microsoft\Windows\CurrentVersion\Run";
+    let (key, _) = hkcu.create_subkey(path).map_err(|e| e.to_string())?;
 
-    // Create a robust PowerShell script
-    // Note: We avoid manual quoting hell by using variables in the script content directly
-    let ps_script = format!(
-        "$Action = New-ScheduledTaskAction -Execute '{}' -Argument '{}' -WorkingDirectory '{}'; \
-         $Trigger = New-ScheduledTaskTrigger -AtLogOn; \
-         $Principal = New-ScheduledTaskPrincipal -UserId (Whoami) -RunLevel Highest; \
-         $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Seconds 0); \
-         Register-ScheduledTask -TaskName 'HotspotManager' -Action $Action -Trigger $Trigger -Principal $Principal -Settings $Settings -Force",
-        exe_str.replace("'", "''"), 
-        args, 
-        cwd_str.replace("'", "''")
-    );
-
-    // Write to a temporary file
-    let temp_dir = env::temp_dir();
-    let script_path = temp_dir.join("enable_hotspot_startup.ps1");
-    fs::write(&script_path, ps_script).map_err(|e| e.to_string())?;
-    let script_path_str = script_path.to_str().ok_or("Invalid script path")?;
-
-    // Execute the script with RunAs (Admin)
-    let output = Command::new("powershell")
-        .args(&[
-            "Start-Process",
-            "powershell",
-            "-Verb", "RunAs",
-            "-WindowStyle", "Hidden",
-            "-Wait",
-            "-ArgumentList",
-            &format!("\"-NoProfile -ExecutionPolicy Bypass -File '{}'\"", script_path_str) // Simple quoting
-        ])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    // Clean up temp file
-    let _ = fs::remove_file(script_path);
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
+    key.set_value("HotspotManager", &command).map_err(|e| e.to_string())?;
+    
     Ok(())
 }
 
 #[tauri::command]
 async fn disable_startup() -> Result<(), String> {
-    let ps_script = "Unregister-ScheduledTask -TaskName 'HotspotManager' -Confirm:$false -ErrorAction SilentlyContinue";
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let path = r"Software\Microsoft\Windows\CurrentVersion\Run";
+    let key = hkcu.open_subkey_with_flags(path, KEY_WRITE).map_err(|e| e.to_string())?;
 
-    let temp_dir = env::temp_dir();
-    let script_path = temp_dir.join("disable_hotspot_startup.ps1");
-    fs::write(&script_path, ps_script).map_err(|e| e.to_string())?;
-    let script_path_str = script_path.to_str().ok_or("Invalid script path")?;
-
-    let _output = Command::new("powershell")
-        .args(&[
-            "Start-Process",
-            "powershell",
-            "-Verb", "RunAs",
-            "-WindowStyle", "Hidden",
-            "-Wait",
-            "-ArgumentList",
-            &format!("\"-NoProfile -ExecutionPolicy Bypass -File '{}'\"", script_path_str)
-        ])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    let _ = fs::remove_file(script_path);
+    // Ignore error if value doesn't exist
+    let _ = key.delete_value("HotspotManager");
 
     Ok(())
 }
 
 #[tauri::command]
 async fn is_startup_enabled() -> bool {
-    let output = Command::new("schtasks")
         .args(&["/query", "/tn", "HotspotManager"])
         .creation_flags(CREATE_NO_WINDOW)
         .output();

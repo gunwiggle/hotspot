@@ -1,7 +1,7 @@
-﻿# Hotspot Manager v0.5.24
+﻿# Hotspot Manager v0.5.25
 
 ## Yenilikler
 
 
 ## Notlar
-- Fixed PowerShell argument parsing by using temp script file execution
+- Migrated startup mechanism from Windows Task Scheduler to Registry (Run key) for faster and more reliable startup
