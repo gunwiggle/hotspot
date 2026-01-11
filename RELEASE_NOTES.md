@@ -1,7 +1,7 @@
-﻿# Hotspot Manager v0.5.27
+﻿# Hotspot Manager v0.5.28
 
 ## Yenilikler
 
 
 ## Notlar
-- Optimized startup for ultra-low latency using High Priority XML Task Scheduler method, deprecating Registry method
+- Added Windows Service launcher for ultra-fast startup before other apps

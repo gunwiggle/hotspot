@@ -459,14 +459,24 @@ fn disable_registry_startup() -> Result<(), String> {
 
 #[tauri::command]
 async fn disable_startup() -> Result<(), String> {
-    // 1. Delete Scheduled Task
-    let ps_command = "Start-Process schtasks -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList '/delete /tn HotspotManager /f'";
+    // 1. Stop and Delete Service
     let _ = Command::new("powershell")
-        .args(&["-Command", ps_command])
+        .args(&["-Command", "Start-Process sc.exe -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList 'stop HotspotLauncher'"])
         .creation_flags(CREATE_NO_WINDOW)
         .output();
 
-    // 2. Delete Registry Key (Double cleanup)
+    let _ = Command::new("powershell")
+        .args(&["-Command", "Start-Process sc.exe -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList 'delete HotspotLauncher'"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+
+    // 2. Delete Scheduled Task (legacy cleanup)
+    let _ = Command::new("powershell")
+        .args(&["-Command", "Start-Process schtasks -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList '/delete /tn HotspotManager /f'"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+
+    // 3. Delete Registry Key (legacy cleanup)
     let _ = disable_registry_startup();
 
     Ok(())
@@ -474,7 +484,19 @@ async fn disable_startup() -> Result<(), String> {
 
 #[tauri::command]
 async fn is_startup_enabled() -> bool {
-    // Check Task Scheduler
+    // Check for Windows Service first
+    let service_exists = Command::new("sc")
+        .args(&["query", "HotspotLauncher"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    if service_exists {
+        return true;
+    }
+
+    // Fallback: Check Task Scheduler
     let task_exists = Command::new("schtasks")
         .args(&["/query", "/tn", "HotspotManager"])
         .creation_flags(CREATE_NO_WINDOW)
@@ -486,7 +508,7 @@ async fn is_startup_enabled() -> bool {
         return true;
     }
 
-    // Fallback: Check Registry (in case user hasn't toggled yet)
+    // Fallback: Check Registry
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let path = r"Software\Microsoft\Windows\CurrentVersion\Run";
     if let Ok(key) = hkcu.open_subkey_with_flags(path, KEY_READ) {
@@ -494,6 +516,73 @@ async fn is_startup_enabled() -> bool {
     }
 
     false
+}
+
+#[tauri::command]
+async fn install_service() -> Result<(), String> {
+    let exe_path = current_exe().map_err(|e| e.to_string())?;
+    let launcher_path = exe_path
+        .parent()
+        .ok_or("Invalid parent")?
+        .join("hotspot-launcher.exe");
+
+    let launcher_str = launcher_path.to_str().ok_or("Invalid path")?;
+
+    // Create service using sc.exe (requires admin)
+    let create_args = format!(
+        "create HotspotLauncher binPath= \"{}\" start= auto DisplayName= \"Hotspot Manager Launcher\"",
+        launcher_str
+    );
+
+    let ps_command = format!(
+        "Start-Process sc.exe -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList '{}'",
+        create_args
+    );
+
+    let output = Command::new("powershell")
+        .args(&["-Command", &ps_command])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+
+    // Start the service
+    let _ = Command::new("powershell")
+        .args(&["-Command", "Start-Process sc.exe -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList 'start HotspotLauncher'"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+
+    // Cleanup old methods
+    let _ = disable_registry_startup();
+    let _ = Command::new("powershell")
+        .args(&["-Command", "Start-Process schtasks -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList '/delete /tn HotspotManager /f'"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn uninstall_service() -> Result<(), String> {
+    let _ = Command::new("powershell")
+        .args(&["-Command", "Start-Process sc.exe -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList 'stop HotspotLauncher'"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+
+    let output = Command::new("powershell")
+        .args(&["-Command", "Start-Process sc.exe -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList 'delete HotspotLauncher'"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+
+    Ok(())
 }
 
 fn check_and_migrate_legacy_autostart() {
@@ -692,7 +781,9 @@ pub fn run() {
             get_github_token,
             enable_startup,
             disable_startup,
-            is_startup_enabled
+            is_startup_enabled,
+            install_service,
+            uninstall_service
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

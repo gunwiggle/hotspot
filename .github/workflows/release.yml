@@ -79,6 +79,19 @@ jobs:
             echo "RELEASE_BODY=See the assets to download this version and install." >> $GITHUB_ENV
           fi
 
+      - name: Build Launcher Service
+        run: |
+          cd src-tauri
+          cargo build --release --bin hotspot-launcher
+        env:
+          CI: true
+
+      - name: Copy Launcher to Bundle
+        shell: bash
+        run: |
+          mkdir -p src-tauri/target/release/bundle
+          cp src-tauri/target/release/hotspot-launcher.exe src-tauri/target/release/ || true
+
       - name: Compile for Cache (Main Branch)
         if: github.ref == 'refs/heads/main'
         run: npm run tauri build
