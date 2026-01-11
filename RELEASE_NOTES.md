@@ -1,7 +1,7 @@
-﻿# Hotspot Manager v0.5.37
+﻿# Hotspot Manager v0.5.38
 
 ## Yenilikler
 
 
 ## Notlar
-- Fixed launcher to pass --minimized flag for tray startup
+- Fixed NSIS hooks: .nsh extension and perMachine mode for admin rights
