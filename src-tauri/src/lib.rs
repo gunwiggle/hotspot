@@ -608,6 +608,20 @@ pub fn run() {
                 })
                 .build(app)?;
 
+            let handle = app.handle().clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(2000));
+                tauri::async_runtime::block_on(async {
+                    let is_connected = check_connection().await;
+                    let status = if is_connected {
+                        "connected"
+                    } else {
+                        "disconnected"
+                    };
+                    update_tray_icon(handle, status.to_string());
+                });
+            });
+
             Ok(())
         })
         .on_window_event(|window, event| {

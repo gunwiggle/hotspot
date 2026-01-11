@@ -1,7 +1,7 @@
-﻿# Hotspot Manager v0.5.39
+﻿# Hotspot Manager v0.5.40
 
 ## Yenilikler
 
 
 ## Notlar
-- Fixed initial tray icon: added delay for tray initialization before connection check
+- Fixed tray icon: backend now checks connection on startup and updates tray
