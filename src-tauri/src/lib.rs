@@ -39,22 +39,17 @@ fn get_github_token() -> String {
 
 fn init_logging() {
     // Use default config to avoid 'time' crate dependency issues for now
-    let log_config = ConfigBuilder::new().build();
+    let log_config = ConfigBuilder::new().set_time_format_rfc3339().build();
 
-    // Log to a file in the same directory as the executable (or temp if fails)
-    let log_path = if let Ok(exe_path) = std::env::current_exe() {
-        exe_path.parent().unwrap().join("hotspot_manager.log")
+    let log_path = std::env::temp_dir().join("hotspot_manager.log");
+
+    if let Ok(file) = File::create(&log_path) {
+        let _ = WriteLogger::init(LevelFilter::Info, log_config, file);
+        info!("Logging initialized at {:?}", log_path);
     } else {
-        std::env::temp_dir().join("hotspot_manager.log")
-    };
-
-    let _ = WriteLogger::init(
-        LevelFilter::Info,
-        log_config,
-        File::create(log_path).unwrap_or_else(|_| File::create("hotspot.log").unwrap()),
-    );
-
-    info!("Logging initialized");
+        // Fallback or silently fail, but do NOT panic
+        eprintln!("Failed to create log file at {:?}", log_path);
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
