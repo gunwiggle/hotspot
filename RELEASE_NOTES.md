@@ -1,7 +1,7 @@
-﻿# Hotspot Manager v0.5.34
+﻿# Hotspot Manager v0.5.35
 
 ## Yenilikler
 
 
 ## Notlar
-- Re-release for testing installer error
+- Added NSIS hooks to stop/start service during update
