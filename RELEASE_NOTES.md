@@ -1,7 +1,4 @@
-﻿# Hotspot Manager v0.5.47
+﻿# Hotspot Manager v0.5.49
 
 ## Yenilikler
 
-
-## Notlar
-- Final fix for logging config
