@@ -12,7 +12,10 @@ function App() {
 
     const { checkForUpdates, checkConnection } = useHotspotStore.getState();
 
-    checkConnection(true);
+    setTimeout(() => {
+      checkConnection(false);
+    }, 1500);
+
     checkForUpdates(true, true);
 
     const interval = setInterval(() => {

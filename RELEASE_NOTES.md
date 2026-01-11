@@ -1,7 +1,7 @@
-﻿# Hotspot Manager v0.5.38
+﻿# Hotspot Manager v0.5.39
 
 ## Yenilikler
 
 
 ## Notlar
-- Fixed NSIS hooks: .nsh extension and perMachine mode for admin rights
+- Fixed initial tray icon: added delay for tray initialization before connection check
