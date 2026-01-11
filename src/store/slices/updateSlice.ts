@@ -65,8 +65,8 @@ export const createUpdateSlice: StateCreator<HotspotState, [], [], UpdateSlice> 
                         updateInfo: {
                             ...state.updateInfo,
                             status: 'up-to-date',
-                            checkInProgress: false,
-                            lastCheckTime: now
+                            checkInProgress: false
+                            // Do not update lastCheckTime so user can check again soon
                         }
                     };
                 });
