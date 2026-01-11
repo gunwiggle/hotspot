@@ -2,6 +2,7 @@ use image::imageops::FilterType;
 use local_ip_address::local_ip;
 use serde::{Deserialize, Serialize};
 use std::env;
+use std::fs;
 use std::process::Command;
 use std::sync::Mutex;
 use sysinfo::{NetworkExt, System, SystemExt};
@@ -338,45 +339,158 @@ fn get_github_token() -> String {
 async fn enable_startup(minimized: bool) -> Result<(), String> {
     let exe_path = current_exe().map_err(|e| e.to_string())?;
     let raw_path = exe_path.to_str().ok_or("Invalid path")?;
-    // Strip the \\?\ prefix for registry compatibility
     let exe_str = raw_path.strip_prefix("\\\\?\\").unwrap_or(raw_path);
 
-    let args = if minimized { " --minimized" } else { "" };
-    // Quote the executable path to handle spaces safely
-    let command = format!("\"{}\"{}", exe_str, args);
+    let cwd_path = exe_path.parent().ok_or("Invalid parent dir")?;
+    let raw_cwd = cwd_path.to_str().ok_or("Invalid cwd path")?;
+    let cwd_str = raw_cwd.strip_prefix("\\\\?\\").unwrap_or(raw_cwd);
 
-    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    let path = r"Software\Microsoft\Windows\CurrentVersion\Run";
-    let (key, _) = hkcu.create_subkey(path).map_err(|e| e.to_string())?;
+    let args = if minimized { "--minimized" } else { "" };
 
-    key.set_value("HotspotManager", &command)
+    // 1. Get Current User (Domain\User) for the Task Principal
+    let user_output = Command::new("whoami")
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| format!("Failed to get user: {}", e))?;
+    let user_id = String::from_utf8_lossy(&user_output.stdout)
+        .trim()
+        .to_string();
+
+    // 2. Construct XML Content
+    // Priority 2 = High Priority (wins against Normal 4-6)
+    // ExecutionTimeLimit PT0S = Unlimited
+    // DisallowStartIfOnBatteries = false -> Crucial for laptops
+    let xml_content = format!(
+        r#"<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>Hotspot Manager Auto-Start (High Priority)</Description>
+  </RegistrationInfo>
+  <Triggers>
+    <LogonTrigger>
+      <Enabled>true</Enabled>
+      <UserId>{}</UserId>
+    </LogonTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <UserId>{}</UserId>
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>HighestAvailable</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <IdleSettings>
+      <StopOnIdleEnd>true</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <WakeToRun>false</WakeToRun>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Priority>2</Priority>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>{}</Command>
+      <Arguments>{}</Arguments>
+      <WorkingDirectory>{}</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>"#,
+        user_id, user_id, exe_str, args, cwd_str
+    );
+
+    // 3. Write XML to Temp File (UTF-16 LE is standard for Windows XML, but schtasks usually accepts UTF-8 for basic ASCII content.
+    // However, to be safe with special chars in paths, we stick to standard Rust UTF-8 file writing.
+    // Schtasks supports UTF-8 XML if it doesn't have a BOM or has specific encoding decl.
+    // We set encoding="UTF-16" in header but write UTF-8.
+    // Actually, it's safer to *remove* the encoding declaration if we write UTF-8, OR use UTF-16.
+    // Let's remove encoding attribute to let parser detect.)
+    let xml_clean = xml_content.replace("encoding=\"UTF-16\"", ""); // Simple hack
+
+    let temp_dir = env::temp_dir();
+    let xml_path = temp_dir.join("hotspot_startup.xml");
+    fs::write(&xml_path, xml_clean).map_err(|e| e.to_string())?;
+    let xml_path_str = xml_path.to_str().ok_or("Invalid XML path")?;
+
+    // 4. Register Task via PowerShell Start-Process (RunAs Admin)
+    // schtasks /create /tn "HotspotManager" /xml "path" /f
+    let ps_command = format!(
+        "Start-Process schtasks -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList '/create /tn HotspotManager /xml \"{}\" /f'",
+        xml_path_str
+    );
+
+    let output = Command::new("powershell")
+        .args(&["-Command", &ps_command])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
         .map_err(|e| e.to_string())?;
 
+    // 5. Cleanup Registry Key (Migration from v0.5.25)
+    let _ = disable_registry_startup();
+
+    // 6. Cleanup Temp File
+    let _ = fs::remove_file(xml_path);
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+
+    Ok(())
+}
+
+fn disable_registry_startup() -> Result<(), String> {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let path = r"Software\Microsoft\Windows\CurrentVersion\Run";
+    if let Ok(key) = hkcu.open_subkey_with_flags(path, KEY_WRITE) {
+        let _ = key.delete_value("HotspotManager");
+    }
     Ok(())
 }
 
 #[tauri::command]
 async fn disable_startup() -> Result<(), String> {
-    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    let path = r"Software\Microsoft\Windows\CurrentVersion\Run";
-    let key = hkcu
-        .open_subkey_with_flags(path, KEY_WRITE)
-        .map_err(|e| e.to_string())?;
+    // 1. Delete Scheduled Task
+    let ps_command = "Start-Process schtasks -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList '/delete /tn HotspotManager /f'";
+    let _ = Command::new("powershell")
+        .args(&["-Command", ps_command])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
 
-    // Ignore error if value doesn't exist
-    let _ = key.delete_value("HotspotManager");
+    // 2. Delete Registry Key (Double cleanup)
+    let _ = disable_registry_startup();
 
     Ok(())
 }
 
 #[tauri::command]
 async fn is_startup_enabled() -> bool {
+    // Check Task Scheduler
+    let task_exists = Command::new("schtasks")
+        .args(&["/query", "/tn", "HotspotManager"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    if task_exists {
+        return true;
+    }
+
+    // Fallback: Check Registry (in case user hasn't toggled yet)
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let path = r"Software\Microsoft\Windows\CurrentVersion\Run";
-
     if let Ok(key) = hkcu.open_subkey_with_flags(path, KEY_READ) {
-        let result: Result<String, _> = key.get_value("HotspotManager");
-        return result.is_ok();
+        return key.get_value::<String, _>("HotspotManager").is_ok();
     }
 
     false

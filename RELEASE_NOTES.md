@@ -1,7 +1,7 @@
-﻿# Hotspot Manager v0.5.26
+﻿# Hotspot Manager v0.5.27
 
 ## Yenilikler
 
 
 ## Notlar
-- Fixed build error in v0.5.25: Corrected Registry check implementation in lib.rs
+- Optimized startup for ultra-low latency using High Priority XML Task Scheduler method, deprecating Registry method
