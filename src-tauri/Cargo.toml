@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Yurt interneti için otomatik giriş uygulaması"
 authors = ["you"]
 edition = "2021"
+default-run = "hotspot"
 
 [lib]
 name = "hotspot_lib"
