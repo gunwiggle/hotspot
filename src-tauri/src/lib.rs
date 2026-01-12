@@ -171,7 +171,7 @@ pub fn run() {
                         "disconnected"
                     };
                     info!("Initial connection status: {}", status);
-                    tray::update_tray_icon(&handle, status);
+                    tray::update_tray_icon(handle.clone(), status.to_string());
                     let _ = handle.emit("network-status-update", is_connected);
                 });
             });
@@ -207,7 +207,8 @@ pub fn run() {
             startup::enable_startup,
             startup::disable_startup,
             startup::is_startup_enabled,
-            get_github_token
+            get_github_token,
+            tray::update_tray_icon
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

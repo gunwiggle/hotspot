@@ -1,7 +1,7 @@
-﻿# Hotspot Manager v0.5.51
+﻿# Hotspot Manager v0.5.52
 
 ## Yenilikler
 
 
 ## Notlar
-- Fix: Sync Frontend UI with Tray Icon status (resolve 'Checking...' hang and stuck Disconnected state)
+- Fix: Actually expose tray icon update command to frontend (was failing silently), ensuring Tray Icon stays in sync with UI state

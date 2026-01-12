@@ -1,10 +1,10 @@
 use image::imageops::FilterType;
 use tauri::image::Image;
-use tauri::AppHandle;
 
-pub fn update_tray_icon(app: &AppHandle, status: &str) {
+#[tauri::command]
+pub fn update_tray_icon(app: tauri::AppHandle, status: String) {
     if let Some(tray) = app.tray_by_id("main-tray") {
-        let (tooltip, icon_bytes) = match status {
+        let (tooltip, icon_bytes) = match status.as_str() {
             "connected" => (
                 "Hotspot Manager - Bağlı",
                 include_bytes!("../../icons/tray-connected.png").to_vec(),
