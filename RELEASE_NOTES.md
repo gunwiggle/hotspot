@@ -1,7 +1,7 @@
-﻿# Hotspot Manager v0.5.52
+﻿# Hotspot Manager v0.5.53
 
 ## Yenilikler
 
 
 ## Notlar
-- Fix: Actually expose tray icon update command to frontend (was failing silently), ensuring Tray Icon stays in sync with UI state
+- Fix: Resolve Settings UI flicker by caching 'Start with Windows' state in global store instead of fetching on every render

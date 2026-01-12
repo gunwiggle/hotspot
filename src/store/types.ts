@@ -93,4 +93,7 @@ export interface HotspotState {
     addLog: (message: string) => void
     saveSettings: () => Promise<void>
     loadSettings: () => Promise<void>
+    autoStartEnabled: boolean
+    checkAutoStartStatus: () => Promise<void>
+    toggleAutoStart: (enabled: boolean) => Promise<void>
 }

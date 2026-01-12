@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { RefreshCw, Loader2 } from 'lucide-react'
 import { useHotspotStore } from '@/store/hotspot'
-import { invoke } from '@tauri-apps/api/core'
-import { useState, useEffect } from 'react'
+
+
 
 interface SettingsCardProps {
     appVersion: string
@@ -20,14 +20,10 @@ export function SettingsCard({ appVersion }: SettingsCardProps) {
         updateInfo,
         checkForUpdates,
         installUpdate,
-        restartApp
+        restartApp,
+        autoStartEnabled,
+        toggleAutoStart
     } = useHotspotStore()
-
-    const [autoStart, setAutoStart] = useState(false)
-
-    useEffect(() => {
-        invoke<boolean>('is_startup_enabled').then(setAutoStart).catch(console.error)
-    }, [])
 
     const handleSettingsChange = async (key: keyof typeof settings, value: boolean) => {
         setSettings({ ...settings, [key]: value })
@@ -35,19 +31,9 @@ export function SettingsCard({ appVersion }: SettingsCardProps) {
     }
 
     const handleAutoStartChange = async (checked: boolean) => {
-        // Optimistic update
-        setAutoStart(checked)
         try {
-            if (checked) {
-                await invoke('enable_startup', { minimized: settings.startInTray })
-            } else {
-                await invoke('disable_startup')
-            }
+            await toggleAutoStart(checked)
         } catch (error) {
-            console.error('Failed to change autostart settings:', error)
-            // Revert on failure
-            setAutoStart(!checked)
-            // Show error to user
             alert(`Başlangıç ayarı değiştirilemedi: ${error}`)
         }
     }
@@ -72,12 +58,12 @@ export function SettingsCard({ appVersion }: SettingsCardProps) {
                             </p>
                         </div>
                         <Switch
-                            checked={autoStart}
+                            checked={autoStartEnabled}
                             onCheckedChange={handleAutoStartChange}
                         />
                     </div>
 
-                    <div className="flex items-center justify-between opacity-transition transition-opacity duration-200" style={{ opacity: autoStart ? 1 : 0.5, pointerEvents: autoStart ? 'auto' : 'none' }}>
+                    <div className="flex items-center justify-between opacity-transition transition-opacity duration-200" style={{ opacity: autoStartEnabled ? 1 : 0.5, pointerEvents: autoStartEnabled ? 'auto' : 'none' }}>
                         <div className="space-y-0.5">
                             <Label>Sistem Tepsisinde Başlat</Label>
                             <p className="text-sm text-muted-foreground">
@@ -87,7 +73,7 @@ export function SettingsCard({ appVersion }: SettingsCardProps) {
                         <Switch
                             checked={settings.startInTray}
                             onCheckedChange={handleStartMinimizedChange}
-                            disabled={!autoStart}
+                            disabled={!autoStartEnabled}
                         />
                     </div>
 

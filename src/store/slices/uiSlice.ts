@@ -14,6 +14,9 @@ export interface UISlice {
     addLog: HotspotState['addLog']
     saveSettings: HotspotState['saveSettings']
     loadSettings: HotspotState['loadSettings']
+    autoStartEnabled: HotspotState['autoStartEnabled']
+    checkAutoStartStatus: HotspotState['checkAutoStartStatus']
+    toggleAutoStart: HotspotState['toggleAutoStart']
 }
 
 export const createUISlice: StateCreator<HotspotState, [], [], UISlice> = (set, get) => ({
@@ -49,8 +52,39 @@ export const createUISlice: StateCreator<HotspotState, [], [], UISlice> = (set, 
         try {
             const settings = await invoke<UISlice['settings']>('load_settings')
             set({ settings })
+            // Check autostart status after loading settings
+            get().checkAutoStartStatus()
         } catch (e) {
             console.error('Settings load failed', e)
+        }
+    },
+
+    autoStartEnabled: false,
+
+    checkAutoStartStatus: async () => {
+        try {
+            const enabled = await invoke<boolean>('is_startup_enabled')
+            set({ autoStartEnabled: enabled })
+        } catch (e) {
+            console.error('Failed to check autostart', e)
+        }
+    },
+
+    toggleAutoStart: async (checked: boolean) => {
+        // Optimistic update
+        set({ autoStartEnabled: checked })
+        const { settings } = get()
+        try {
+            if (checked) {
+                await invoke('enable_startup', { minimized: settings.startInTray })
+            } else {
+                await invoke('disable_startup')
+            }
+        } catch (error) {
+            console.error('Failed to change autostart settings:', error)
+            // Revert on failure
+            set({ autoStartEnabled: !checked })
+            throw error // Re-throw to handle in UI if needed
         }
     }
 })
