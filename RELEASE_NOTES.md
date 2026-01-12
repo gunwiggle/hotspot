@@ -1,7 +1,7 @@
-﻿# Hotspot Manager v0.5.53
+﻿# Hotspot Manager v0.5.54
 
 ## Yenilikler
 
 
 ## Notlar
-- Fix: Resolve Settings UI flicker by caching 'Start with Windows' state in global store instead of fetching on every render
+- Fix: Persist Tray Icon handle in AppState to prevent premature drop/garbage collection, ensuring System Tray updates (green/blue icon) work correctly on startup

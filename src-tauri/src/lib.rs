@@ -8,7 +8,7 @@ use std::sync::Mutex;
 use sysinfo::{System, SystemExt};
 use tauri::{
     menu::{Menu, MenuItem},
-    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager,
 };
 
@@ -17,6 +17,7 @@ pub struct AppState {
     pub is_connected: Mutex<bool>,
     pub settings: Mutex<config::Settings>,
     pub sys: Mutex<System>,
+    pub tray: Mutex<Option<TrayIcon>>,
 }
 
 impl Default for AppState {
@@ -26,6 +27,7 @@ impl Default for AppState {
             is_connected: Mutex::new(false),
             settings: Mutex::new(config::Settings::default()),
             sys: Mutex::new(System::new_all()),
+            tray: Mutex::new(None),
         }
     }
 }
@@ -155,6 +157,12 @@ pub fn run() {
                     }
                 })
                 .build(app)?;
+
+            // Store tray handle to prevent dropping
+            let app_state = app.state::<AppState>();
+            if let Ok(mut tray_guard) = app_state.tray.lock() {
+                *tray_guard = Some(_tray);
+            }
 
             // Initial Connection Check & Tray Update
             let handle = app.handle().clone();
