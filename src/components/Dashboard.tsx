@@ -130,6 +130,7 @@ export function Dashboard() {
                 !state.userManuallyDisabledHotspot &&
                 !state.isTogglingHotspot
             ) {
+                console.log("[Hotspot] Etkin nokta kapalı ve keepHotspotOn aktif, otomatik açılıyor...")
                 await state.toggleHotspot()
             }
         }, 15000)

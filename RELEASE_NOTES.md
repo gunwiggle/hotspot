@@ -1,7 +1,7 @@
-﻿# Hotspot Manager v0.5.57
+﻿# Hotspot Manager v0.5.58
 
 ## Yenilikler
-- ci: optimize release workflow for faster builds
+
 
 ## Notlar
-- ci: faster release builds with cache optimization
+- fix: disable 'keep hotspot on' when manually toggled off + UI feedback

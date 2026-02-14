@@ -22,7 +22,8 @@ export function SettingsCard({ appVersion }: SettingsCardProps) {
         installUpdate,
         restartApp,
         autoStartEnabled,
-        toggleAutoStart
+        toggleAutoStart,
+        userManuallyDisabledHotspot
     } = useHotspotStore()
 
     const handleSettingsChange = async (key: keyof typeof settings, value: boolean) => {
@@ -100,14 +101,18 @@ export function SettingsCard({ appVersion }: SettingsCardProps) {
                 <CardContent className="space-y-6">
                     <div className="flex items-center justify-between">
                         <div className="space-y-0.5">
-                            <Label>Daima Açık Tut</Label>
-                            <p className="text-sm text-muted-foreground">
-                                Bilgisayar açıldığında etkin noktayı otomatik başlatır ve kapanırsa tekrar açar
+                            <Label className={userManuallyDisabledHotspot ? "text-muted-foreground" : ""}>Daima Açık Tut</Label>
+                            <p className={`text-sm ${userManuallyDisabledHotspot ? "text-orange-500 font-medium" : "text-muted-foreground"}`}>
+                                {userManuallyDisabledHotspot
+                                    ? "Etkin nokta elle kapatıldığı için otomatik açma devre dışı bırakıldı."
+                                    : "Bilgisayar açıldığında etkin noktayı otomatik başlatır ve kapanırsa tekrar açar"
+                                }
                             </p>
                         </div>
                         <Switch
                             checked={settings.keepHotspotOn}
                             onCheckedChange={(checked) => handleSettingsChange('keepHotspotOn', checked)}
+                            disabled={userManuallyDisabledHotspot}
                         />
                     </div>
                 </CardContent>
