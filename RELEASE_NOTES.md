@@ -1,7 +1,7 @@
-﻿# Hotspot Manager v0.5.58
+﻿# Hotspot Manager v0.5.59
 
 ## Yenilikler
-
+- chore: optimize build cache & fix manual toggle logic
 
 ## Notlar
-- fix: disable 'keep hotspot on' when manually toggled off + UI feedback
+- fix(hotspot): better manual toggle detection & build cache optimization
