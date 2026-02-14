@@ -1,7 +1,7 @@
 mod modules;
 
 use log::{error, info, LevelFilter};
-use modules::{auth, config, network, startup, tray};
+use modules::{auth, config, hotspot_toggle, network, startup, tray};
 use simplelog::*;
 use std::fs::File;
 use std::sync::Mutex;
@@ -147,7 +147,12 @@ pub fn run() {
                             let is_minimized = window.is_minimized().unwrap_or(false);
 
                             if is_visible && !is_minimized {
-                                let _ = window.minimize();
+                                let is_focused = window.is_focused().unwrap_or(false);
+                                if is_focused {
+                                    let _ = window.minimize();
+                                } else {
+                                    let _ = window.set_focus();
+                                }
                             } else {
                                 let _ = window.unminimize();
                                 let _ = window.show();
@@ -216,7 +221,9 @@ pub fn run() {
             startup::disable_startup,
             startup::is_startup_enabled,
             get_github_token,
-            tray::update_tray_icon
+            tray::update_tray_icon,
+            hotspot_toggle::toggle_hotspot,
+            hotspot_toggle::get_hotspot_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

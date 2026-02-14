@@ -11,6 +11,8 @@ export interface Settings {
     autoReconnect: boolean
     privacyMode: boolean
     startInTray: boolean
+    connectOnStartup: boolean
+    keepHotspotOn: boolean
 }
 
 export interface SpeedTestResult {
@@ -66,6 +68,12 @@ export interface HotspotState {
     performPingTest: () => Promise<void>
     fetchPublicIp: () => Promise<void>
     manualDisconnect: boolean
+
+    hotspotEnabled: boolean
+    isTogglingHotspot: boolean
+    userManuallyDisabledHotspot: boolean
+    toggleHotspot: () => Promise<void>
+    checkHotspotStatus: () => Promise<void>
 
     // Speed Slice
     speedTestResult: SpeedTestResult

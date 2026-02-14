@@ -26,7 +26,9 @@ export const createUISlice: StateCreator<HotspotState, [], [], UISlice> = (set, 
         minimizeToTray: true,
         autoReconnect: false,
         privacyMode: false,
-        startInTray: true
+        startInTray: true,
+        connectOnStartup: false,
+        keepHotspotOn: false
     },
     isChecking: false,
     isSettingsOpen: false,

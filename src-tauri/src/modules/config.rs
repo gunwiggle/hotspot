@@ -26,6 +26,8 @@ pub struct Settings {
     pub minimize_to_tray: bool,
     pub auto_reconnect: bool,
     pub start_in_tray: bool,
+    pub connect_on_startup: bool,
+    pub keep_hotspot_on: bool,
 }
 
 impl Default for Settings {
@@ -34,6 +36,8 @@ impl Default for Settings {
             minimize_to_tray: true,
             auto_reconnect: false,
             start_in_tray: true,
+            connect_on_startup: false,
+            keep_hotspot_on: false,
         }
     }
 }
@@ -84,6 +88,11 @@ pub async fn save_settings(app: tauri::AppHandle, settings: Settings) -> Result<
     );
     store.set("autoReconnect", serde_json::json!(settings.auto_reconnect));
     store.set("startInTray", serde_json::json!(settings.start_in_tray));
+    store.set(
+        "connectOnStartup",
+        serde_json::json!(settings.connect_on_startup),
+    );
+    store.set("keepHotspotOn", serde_json::json!(settings.keep_hotspot_on));
     store.save().map_err(|e| e.to_string())?;
 
     let state = app.state::<AppState>();
@@ -117,10 +126,22 @@ pub async fn load_settings(app: tauri::AppHandle) -> Result<Settings, String> {
         .and_then(|v| v.as_bool())
         .unwrap_or(true);
 
+    let connect_on_startup = store
+        .get("connectOnStartup")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    let keep_hotspot_on = store
+        .get("keepHotspotOn")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
     let settings = Settings {
         minimize_to_tray,
         auto_reconnect,
         start_in_tray,
+        connect_on_startup,
+        keep_hotspot_on,
     };
 
     let state = app.state::<AppState>();

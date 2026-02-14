@@ -77,27 +77,69 @@ export function Dashboard() {
         fetchPublicIp,
         performPingTest,
         performLogout,
+        performLogin,
         updateInfo,
         isSettingsOpen,
-        setSettingsOpen
+        setSettingsOpen,
+        settings,
+        checkHotspotStatus,
+        hotspotEnabled,
+        userManuallyDisabledHotspot,
+        toggleHotspot
     } = useHotspotStore()
+
+    const startupConnectRef = useRef(false)
 
     useEffect(() => {
         loadCredentials()
         loadSettings()
-        // Initial check is explicit (not silent) to show blue icon/status on startup
+        checkHotspotStatus()
         if (!hasCheckedRef.current) {
             checkConnection(false)
             hasCheckedRef.current = true
         }
 
         const interval = setInterval(() => {
-            // Periodic checks are silent to avoid UI flicker/noise
             checkConnection(true)
         }, 10000)
 
         return () => clearInterval(interval)
     }, [])
+
+    useEffect(() => {
+        if (
+            !startupConnectRef.current &&
+            settings.connectOnStartup &&
+            status === 'disconnected' &&
+            hasCheckedRef.current
+        ) {
+            startupConnectRef.current = true
+            performLogin()
+        }
+    }, [settings.connectOnStartup, status])
+
+    useEffect(() => {
+        if (!settings.keepHotspotOn) return
+
+        const monitor = setInterval(async () => {
+            await checkHotspotStatus()
+            const state = useHotspotStore.getState()
+            if (
+                state.settings.keepHotspotOn &&
+                !state.hotspotEnabled &&
+                !state.userManuallyDisabledHotspot &&
+                !state.isTogglingHotspot
+            ) {
+                await state.toggleHotspot()
+            }
+        }, 15000)
+
+        if (!hotspotEnabled && !userManuallyDisabledHotspot) {
+            toggleHotspot()
+        }
+
+        return () => clearInterval(monitor)
+    }, [settings.keepHotspotOn, userManuallyDisabledHotspot])
 
     useEffect(() => {
         // Network stats loop (every 2s)

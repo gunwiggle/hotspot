@@ -9,6 +9,12 @@ export interface NetworkSlice {
     networkStats: HotspotState['networkStats']
     manualDisconnect: HotspotState['manualDisconnect']
 
+    hotspotEnabled: HotspotState['hotspotEnabled']
+    isTogglingHotspot: HotspotState['isTogglingHotspot']
+    userManuallyDisabledHotspot: HotspotState['userManuallyDisabledHotspot']
+    toggleHotspot: HotspotState['toggleHotspot']
+    checkHotspotStatus: HotspotState['checkHotspotStatus']
+
     setStatus: HotspotState['setStatus']
     checkConnection: HotspotState['checkConnection']
     updateNetworkInfo: HotspotState['updateNetworkInfo']
@@ -22,6 +28,10 @@ export const createNetworkSlice: StateCreator<HotspotState, [], [], NetworkSlice
     ipInfo: { local: '...', public: '...' },
     networkStats: { received: 0, transmitted: 0 },
     manualDisconnect: false,
+
+    hotspotEnabled: false,
+    isTogglingHotspot: false,
+    userManuallyDisabledHotspot: false,
 
     setStatus: (status) => {
         set({ status })
@@ -115,5 +125,29 @@ export const createNetworkSlice: StateCreator<HotspotState, [], [], NetworkSlice
         } catch {
             set((state) => ({ ipInfo: { ...state.ipInfo, public: 'Hata' } }))
         }
+    },
+
+    checkHotspotStatus: async () => {
+        try {
+            const enabled = await invoke<boolean>('get_hotspot_status')
+            set({ hotspotEnabled: enabled })
+        } catch (e) {
+            console.error('Hotspot durumu alınamadı', e)
+        }
+    },
+
+    toggleHotspot: async () => {
+        set({ isTogglingHotspot: true })
+        try {
+            const newState = await invoke<boolean>('toggle_hotspot')
+            set({ hotspotEnabled: newState, userManuallyDisabledHotspot: !newState })
+        } catch (e) {
+            console.error('Hotspot toggle başarısız', e)
+        }
+        try {
+            const actual = await invoke<boolean>('get_hotspot_status')
+            set({ hotspotEnabled: actual })
+        } catch { }
+        set({ isTogglingHotspot: false })
     }
 })

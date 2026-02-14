@@ -89,16 +89,25 @@ export function SettingsCard({ appVersion }: SettingsCardProps) {
                             onCheckedChange={(checked) => handleSettingsChange('minimizeToTray', checked)}
                         />
                     </div>
+                </CardContent>
+            </Card>
+
+            <Card className="mt-4">
+                <CardHeader>
+                    <CardTitle>Mobil Etkin Nokta</CardTitle>
+                    <CardDescription>Mobil etkin nokta davranış ayarları</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
                     <div className="flex items-center justify-between">
                         <div className="space-y-0.5">
-                            <Label>Otomatik Yeniden Bağlanma</Label>
+                            <Label>Daima Açık Tut</Label>
                             <p className="text-sm text-muted-foreground">
-                                Bağlantı koptuğunda otomatik olarak tekrar bağlanmayı dener
+                                Bilgisayar açıldığında etkin noktayı otomatik başlatır ve kapanırsa tekrar açar
                             </p>
                         </div>
                         <Switch
-                            checked={settings.autoReconnect}
-                            onCheckedChange={(checked) => handleSettingsChange('autoReconnect', checked)}
+                            checked={settings.keepHotspotOn}
+                            onCheckedChange={(checked) => handleSettingsChange('keepHotspotOn', checked)}
                         />
                     </div>
                 </CardContent>

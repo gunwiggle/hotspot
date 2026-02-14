@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Eye, EyeOff, LogOut, Loader2, RefreshCw, Zap, Settings } from 'lucide-react'
+import { Eye, EyeOff, LogOut, Loader2, RefreshCw, Zap, Settings, Power, RadioTower } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,7 +24,10 @@ export function LoginCard({ onLogout, isLoggingOut }: LoginCardProps) {
         saveCredentials,
         checkConnection,
         setSettings,
-        saveSettings
+        saveSettings,
+        hotspotEnabled,
+        isTogglingHotspot,
+        toggleHotspot
     } = useHotspotStore()
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -40,6 +43,12 @@ export function LoginCard({ onLogout, isLoggingOut }: LoginCardProps) {
     const handleAutoReconnectToggle = async () => {
         const newValue = !settings.autoReconnect;
         setSettings({ ...settings, autoReconnect: newValue });
+        setTimeout(() => saveSettings(), 100);
+    }
+
+    const handleConnectOnStartupToggle = async () => {
+        const newValue = !settings.connectOnStartup;
+        setSettings({ ...settings, connectOnStartup: newValue });
         setTimeout(() => saveSettings(), 100);
     }
 
@@ -140,11 +149,38 @@ export function LoginCard({ onLogout, isLoggingOut }: LoginCardProps) {
                             type="button"
                             variant="outline"
                             size="icon"
+                            onClick={() => toggleHotspot()}
+                            disabled={isTogglingHotspot}
+                            className={hotspotEnabled ? "bg-green-600 hover:bg-green-700 hover:text-white border-green-600" : "text-muted-foreground"}
+                            title={hotspotEnabled ? "Mobil Etkin Nokta: AÇIK" : "Mobil Etkin Nokta: KAPALI"}
+                        >
+                            {isTogglingHotspot ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                                <RadioTower className={`h-4 w-4 ${hotspotEnabled ? "text-white" : ""}`} />
+                            )}
+                        </Button>
+
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
                             onClick={handleAutoReconnectToggle}
                             className={settings.autoReconnect ? "bg-green-600 hover:bg-green-700 hover:text-white border-green-600" : "text-muted-foreground"}
                             title={settings.autoReconnect ? "Otomatik Bağlanma: AÇIK" : "Otomatik Bağlanma: KAPALI"}
                         >
                             <Zap className={`h-4 w-4 ${settings.autoReconnect ? "fill-white text-white" : ""}`} />
+                        </Button>
+
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={handleConnectOnStartupToggle}
+                            className={settings.connectOnStartup ? "bg-blue-600 hover:bg-blue-700 hover:text-white border-blue-600" : "text-muted-foreground"}
+                            title={settings.connectOnStartup ? "Açılışta Bağlan: AÇIK" : "Açılışta Bağlan: KAPALI"}
+                        >
+                            <Power className={`h-4 w-4 ${settings.connectOnStartup ? "text-white" : ""}`} />
                         </Button>
 
                         <Button

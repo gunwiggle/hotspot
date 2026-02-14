@@ -1,3 +1,4 @@
+import { useState, useEffect, useCallback } from 'react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { Minus, X, Zap, RotateCw, Shield } from 'lucide-react'
 import { useHotspotStore } from '@/store/hotspot'
@@ -5,9 +6,32 @@ import { useHotspotStore } from '@/store/hotspot'
 export function CustomTitlebar() {
     const appWindow = getCurrentWindow()
     const { updateInfo, restartApp, settings } = useHotspotStore()
+    const [minimizeHover, setMinimizeHover] = useState(false)
+    const [closeHover, setCloseHover] = useState(false)
 
-    const minimize = () => appWindow.minimize()
-    const close = () => appWindow.close()
+    const resetHover = useCallback(() => {
+        setMinimizeHover(false)
+        setCloseHover(false)
+    }, [])
+
+    useEffect(() => {
+        const unlisten = appWindow.onFocusChanged(({ payload: focused }) => {
+            if (focused) resetHover()
+        })
+        return () => { unlisten.then(f => f()) }
+    }, [])
+
+    const minimize = () => {
+        resetHover()
+        appWindow.minimize()
+    }
+
+    const close = () => {
+        resetHover()
+        appWindow.close()
+    }
+
+    const buttonBase = "h-full w-12 flex items-center justify-center transition-colors focus:outline-none cursor-default"
 
     return (
         <div className="h-10 bg-background border-b flex select-none shrink-0 overflow-hidden">
@@ -51,14 +75,18 @@ export function CustomTitlebar() {
             <div className="flex items-center shrink-0 bg-background z-50">
                 <button
                     onClick={minimize}
-                    className="h-full w-12 flex items-center justify-center hover:bg-white/10 transition-colors text-foreground/70 hover:text-foreground focus:outline-none cursor-default"
+                    onMouseEnter={() => setMinimizeHover(true)}
+                    onMouseLeave={() => setMinimizeHover(false)}
+                    className={`${buttonBase} ${minimizeHover ? "bg-white/10 text-foreground" : "text-foreground/70"}`}
                     type="button"
                 >
                     <Minus className="h-4 w-4 pointer-events-none" />
                 </button>
                 <button
                     onClick={close}
-                    className="h-full w-12 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors text-foreground/70 focus:outline-none cursor-default"
+                    onMouseEnter={() => setCloseHover(true)}
+                    onMouseLeave={() => setCloseHover(false)}
+                    className={`${buttonBase} ${closeHover ? "bg-red-500 text-white" : "text-foreground/70"}`}
                     type="button"
                 >
                     <X className="h-4 w-4 pointer-events-none" />
