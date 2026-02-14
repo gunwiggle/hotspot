@@ -137,17 +137,34 @@ export const createNetworkSlice: StateCreator<HotspotState, [], [], NetworkSlice
     },
 
     toggleHotspot: async () => {
+        const currentEnabled = get().hotspotEnabled
+        const intendedAction = currentEnabled ? 'disable' : 'enable'
+
         set({ isTogglingHotspot: true })
+
         try {
-            const newState = await invoke<boolean>('toggle_hotspot')
-            set({ hotspotEnabled: newState, userManuallyDisabledHotspot: !newState })
+            await invoke<boolean>('toggle_hotspot')
         } catch (e) {
-            console.error('Hotspot toggle başarısız', e)
+            console.error('Hotspot toggle işlem hatası', e)
         }
+
         try {
+            // Hata olsa bile son durumu kontrol et
             const actual = await invoke<boolean>('get_hotspot_status')
             set({ hotspotEnabled: actual })
-        } catch { }
-        set({ isTogglingHotspot: false })
+
+            // Logic Düzeltmesi: Niyetimize göre state'i güncelle
+            if (intendedAction === 'disable' && !actual) {
+                // Kapatmak istedik ve kapandı -> Manuel disable aktif
+                set({ userManuallyDisabledHotspot: true })
+            } else if (intendedAction === 'enable' && actual) {
+                // Açmak istedik ve açıldı -> Manuel disable pasif
+                set({ userManuallyDisabledHotspot: false })
+            }
+        } catch (e) {
+            console.error('Status check hatası', e)
+        } finally {
+            set({ isTogglingHotspot: false })
+        }
     }
 })
