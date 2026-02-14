@@ -1,7 +1,7 @@
-﻿# Hotspot Manager v0.5.56
+﻿# Hotspot Manager v0.5.57
 
 ## Yenilikler
-
+- ci: optimize release workflow for faster builds
 
 ## Notlar
-- fix: hide powershell window completely during hotspot check
+- ci: faster release builds with cache optimization
