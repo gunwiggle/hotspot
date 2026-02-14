@@ -1,7 +1,6 @@
 name: Release
 on:
   push:
-    branches: [ "main" ] # Cache'i main dalinda olusturmak icin
     tags:
       - 'v*'
   workflow_dispatch:
@@ -28,43 +27,25 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: 'lts/*'
-          cache: 'npm' # NPM cache aktivasyonu
+          cache: 'npm'
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
-      - name: Cache Cargo registry and git
-        uses: actions/cache@v3
+      - name: Rust Cache
+        uses: swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('src-tauri/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-registry-
-
-      - name: Cache Cargo target
-        uses: actions/cache@v3
-        with:
-          path: src-tauri/target
-          key: ${{ runner.os }}-cargo-target-${{ hashFiles('src-tauri/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-target-
+          workspaces: './src-tauri -> target'
 
       - name: Install dependencies
-        run: npm ci # npm install yerine ci daha hızlıdır (lock dosyasını kullanır)
+        run: npm ci
 
       - name: Create secrets.rs
         shell: bash
         run: |
           echo "pub const GITHUB_TOKEN: &str = \"${{ secrets.GIST_TOKEN }}\";" > src-tauri/src/secrets.rs
-
-      - name: install dependencies (windows)
-        if: matrix.platform == 'windows-latest'
-        run: |
-          npm install
 
       - name: Read Release Notes
         id: read_release_notes
@@ -91,15 +72,6 @@ jobs:
         run: |
           mkdir -p src-tauri/target/release/bundle
           cp src-tauri/target/release/hotspot-launcher.exe src-tauri/target/release/ || true
-
-      - name: Compile for Cache (Main Branch)
-        if: github.ref == 'refs/heads/main'
-        run: npm run tauri build
-        env:
-          CI: true
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       - name: Build and Release
         id: tauri_build
