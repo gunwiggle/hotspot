@@ -1,7 +1,7 @@
-﻿# Hotspot Manager v0.5.55
+﻿# Hotspot Manager v0.5.56
 
 ## Yenilikler
 
 
 ## Notlar
-- tray focus fix, connect on startup, titlebar hover fix, mobile hotspot toggle, keep hotspot always on
+- fix: hide powershell window completely during hotspot check

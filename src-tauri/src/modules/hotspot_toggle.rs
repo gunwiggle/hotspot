@@ -1,9 +1,12 @@
 use log::info;
+use std::os::windows::process::CommandExt;
 use std::process::Command;
 
 fn run_powershell(script: &str) -> Result<String, String> {
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
     let output = Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", script])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|e| format!("PowerShell çalıştırılamadı: {}", e))?;
 
