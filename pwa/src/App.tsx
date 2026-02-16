@@ -6,45 +6,41 @@ import { StatusCard } from '@/components/StatusCard'
 import { SettingsCard } from '@/components/SettingsCard'
 
 function StatusDot({ status, isChecking }: { status: ConnectionStatus; isChecking: boolean }) {
-    if (isChecking) {
-        return <div className="status-dot bg-blue-500 animate-pulse" style={{ color: '#3b82f6' }} />
-    }
-
+    if (isChecking) return <div className="status-dot animate-pulse" style={{ background: '#3b82f6', boxShadow: '0 0 8px rgba(59,130,246,0.5)' }} />
     const cls: Record<ConnectionStatus, string> = {
         connected: 'status-dot-connected',
         disconnected: 'status-dot-disconnected',
         connecting: 'status-dot-connecting',
         error: 'status-dot-disconnected',
     }
-
     return <div className={`status-dot ${cls[status]}`} />
 }
 
 function StatusBadge({ status, isChecking }: { status: ConnectionStatus; isChecking: boolean }) {
     if (isChecking) {
         return (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/15 text-blue-400">
+            <span className="badge badge-info">
                 <Loader2 size={12} className="animate-spin" />
                 Kontrol...
             </span>
         )
     }
 
-    const variants: Record<ConnectionStatus, { bg: string; text: string; label: string }> = {
-        connected: { bg: 'bg-green-500/15', text: 'text-green-400', label: 'Bağlı' },
-        disconnected: { bg: 'bg-red-500/15', text: 'text-red-400', label: 'Bağlı Değil' },
-        connecting: { bg: 'bg-yellow-500/15', text: 'text-yellow-400', label: 'Bağlanıyor...' },
-        error: { bg: 'bg-red-500/15', text: 'text-red-400', label: 'Hata' },
+    const map: Record<ConnectionStatus, { cls: string; label: string }> = {
+        connected: { cls: 'badge-success', label: 'Bağlı' },
+        disconnected: { cls: 'badge-danger', label: 'Bağlı Değil' },
+        connecting: { cls: 'badge-warning', label: 'Bağlanıyor...' },
+        error: { cls: 'badge-danger', label: 'Hata' },
     }
 
-    const v = variants[status]
+    const { cls, label } = map[status]
 
     return (
-        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${v.bg} ${v.text}`}>
+        <span className={`badge ${cls}`}>
             {status === 'connected' && <Wifi size={12} />}
             {(status === 'disconnected' || status === 'error') && <WifiOff size={12} />}
             {status === 'connecting' && <Loader2 size={12} className="animate-spin" />}
-            {v.label}
+            {label}
         </span>
     )
 }
@@ -95,23 +91,21 @@ export function App() {
         setIsLoggingOut(false)
     }
 
-    if (isSettingsOpen) {
-        return <SettingsCard />
-    }
+    if (isSettingsOpen) return <SettingsCard />
 
     return (
-        <div className="safe-area min-h-[100dvh] bg-[var(--color-background)] p-5 pb-8">
-            <div className="max-w-lg mx-auto space-y-5">
-                <div className="flex items-center justify-between pt-2">
+        <div className="safe-area" style={{ minHeight: '100dvh', padding: '20px', paddingBottom: '40px' }}>
+            <div style={{ maxWidth: '480px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '8px', paddingBottom: '4px' }}>
                     <div>
-                        <h1 className="text-xl font-bold tracking-tight">Hotspot Manager</h1>
-                        <p className="text-xs text-[var(--color-muted-foreground)]">Yurt interneti otomasyonu</p>
+                        <h1 style={{ fontSize: '22px', fontWeight: 700, letterSpacing: '-0.02em' }}>Hotspot Manager</h1>
+                        <p style={{ fontSize: '13px', color: 'var(--color-muted-foreground)', marginTop: '2px' }}>Yurt interneti otomasyonu</p>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <StatusDot status={status} isChecking={isChecking} />
                         <StatusBadge status={status} isChecking={isChecking} />
                         <button
-                            className="btn-icon glass-button relative"
+                            className="btn btn-ghost btn-icon"
                             onClick={() => setSettingsOpen(true)}
                             title="Ayarlar"
                         >
@@ -120,10 +114,8 @@ export function App() {
                     </div>
                 </div>
 
-                <div className="space-y-4">
-                    <LoginCard onLogout={handleLogout} isLoggingOut={isLoggingOut} />
-                    <StatusCard />
-                </div>
+                <LoginCard onLogout={handleLogout} isLoggingOut={isLoggingOut} />
+                <StatusCard />
             </div>
         </div>
     )

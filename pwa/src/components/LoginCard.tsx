@@ -26,117 +26,119 @@ export function LoginCard({ onLogout, isLoggingOut }: LoginCardProps) {
         await performLogin()
     }
 
-    const handleAutoReconnectToggle = () => {
-        setSettings({ ...settings, autoReconnect: !settings.autoReconnect })
-    }
-
-    const handleCheckConnection = () => {
-        checkConnection(false)
-    }
-
     return (
-        <div className="glass-strong p-5 space-y-4">
-            <div className="flex items-center gap-2 mb-1">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <div className="card">
+            <div className="card-header">
+                <div className="card-icon" style={{ background: 'rgba(59, 130, 246, 0.12)', border: '1px solid rgba(59, 130, 246, 0.15)' }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <circle cx="12" cy="12" r="3" />
-                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                        <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
                     </svg>
                 </div>
-                <div>
-                    <h2 className="text-sm font-semibold">Giriş Bilgileri</h2>
-                    <p className="text-xs text-[var(--color-muted-foreground)]">hotspot.maxxarena.de</p>
+                <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '15px', fontWeight: 600 }}>Giriş Bilgileri</div>
+                    <div style={{ fontSize: '12px', color: 'var(--color-muted-foreground)' }}>hotspot.maxxarena.de</div>
                 </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-3">
-                <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-[var(--color-muted-foreground)]">Kullanıcı Adı</label>
-                    <input
-                        type="text"
-                        className="glass-input"
-                        placeholder="Kullanıcı adınız"
-                        value={settings.privacyMode ? '************' : credentials.username}
-                        onChange={(e) => !settings.privacyMode && setCredentials({ ...credentials, username: e.target.value })}
-                        disabled={settings.privacyMode}
-                        autoComplete="username"
-                    />
-                </div>
-
-                <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-[var(--color-muted-foreground)]">Şifre</label>
-                    <div className="relative">
+            <div className="card-body">
+                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div className="input-group">
+                        <label className="input-label">Kullanıcı Adı</label>
                         <input
-                            type={showPassword ? 'text' : 'password'}
-                            className="glass-input pr-12"
-                            placeholder="Şifreniz"
-                            value={settings.privacyMode ? '************' : credentials.password}
-                            onChange={(e) => !settings.privacyMode && setCredentials({ ...credentials, password: e.target.value })}
+                            type="text"
+                            className="input-field"
+                            placeholder="Kullanıcı adınız"
+                            value={settings.privacyMode ? '••••••••' : credentials.username}
+                            onChange={(e) => !settings.privacyMode && setCredentials({ ...credentials, username: e.target.value })}
                             disabled={settings.privacyMode}
-                            autoComplete="current-password"
+                            autoComplete="username"
                         />
-                        <button
-                            type="button"
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-muted-foreground)]"
-                            onClick={() => !settings.privacyMode && setShowPassword(!showPassword)}
-                        >
-                            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                        </button>
                     </div>
-                </div>
 
-                {errorMessage && (
-                    <p className="text-sm text-red-400 font-medium">{errorMessage}</p>
-                )}
+                    <div className="input-group">
+                        <label className="input-label">Şifre</label>
+                        <div style={{ position: 'relative' }}>
+                            <input
+                                type={showPassword ? 'text' : 'password'}
+                                className="input-field"
+                                style={{ paddingRight: '48px' }}
+                                placeholder="Şifreniz"
+                                value={settings.privacyMode ? '••••••••' : credentials.password}
+                                onChange={(e) => !settings.privacyMode && setCredentials({ ...credentials, password: e.target.value })}
+                                disabled={settings.privacyMode}
+                                autoComplete="current-password"
+                            />
+                            <button
+                                type="button"
+                                style={{
+                                    position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)',
+                                    background: 'none', border: 'none', color: 'var(--color-muted-foreground)', cursor: 'pointer', padding: '4px'
+                                }}
+                                onClick={() => !settings.privacyMode && setShowPassword(!showPassword)}
+                            >
+                                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </button>
+                        </div>
+                    </div>
 
-                <div className="flex gap-2">
-                    {status === 'connected' ? (
-                        <button
-                            type="button"
-                            className="btn-red glass-button flex-1 h-11 flex items-center justify-center gap-2 rounded-xl text-sm font-semibold"
-                            onClick={onLogout}
-                            disabled={isLoggingOut}
-                        >
-                            {isLoggingOut ? (
-                                <><Loader2 size={16} className="animate-spin" /> Kesiliyor...</>
-                            ) : (
-                                <><LogOut size={16} /> Bağlantıyı Kes</>
-                            )}
-                        </button>
-                    ) : (
-                        <button
-                            type="submit"
-                            className="btn-green flex-1 h-11 flex items-center justify-center gap-2 rounded-xl text-sm font-semibold"
-                            disabled={status === 'connecting'}
-                        >
-                            {status === 'connecting' ? (
-                                <><Loader2 size={16} className="animate-spin" /> Bağlanıyor...</>
-                            ) : (
-                                'Bağlan'
-                            )}
-                        </button>
+                    {errorMessage && (
+                        <div style={{ fontSize: '13px', color: '#f87171', fontWeight: 500, padding: '8px 12px', background: 'rgba(239,68,68,0.08)', borderRadius: '10px', border: '1px solid rgba(239,68,68,0.15)' }}>
+                            {errorMessage}
+                        </div>
                     )}
 
-                    <button
-                        type="button"
-                        className={`btn-icon glass-button ${settings.autoReconnect ? 'btn-icon-active' : ''}`}
-                        onClick={handleAutoReconnectToggle}
-                        title={settings.autoReconnect ? 'Otomatik Bağlanma: AÇIK' : 'Otomatik Bağlanma: KAPALI'}
-                    >
-                        <Zap size={18} className={settings.autoReconnect ? 'fill-white' : ''} />
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '2px' }}>
+                        {status === 'connected' ? (
+                            <button
+                                type="button"
+                                className="btn btn-danger"
+                                style={{ flex: 1, height: '48px' }}
+                                onClick={onLogout}
+                                disabled={isLoggingOut}
+                            >
+                                {isLoggingOut ? (
+                                    <><Loader2 size={16} className="animate-spin" /> Kesiliyor...</>
+                                ) : (
+                                    <><LogOut size={16} /> Bağlantıyı Kes</>
+                                )}
+                            </button>
+                        ) : (
+                            <button
+                                type="submit"
+                                className="btn btn-primary"
+                                style={{ flex: 1, height: '48px' }}
+                                disabled={status === 'connecting'}
+                            >
+                                {status === 'connecting' ? (
+                                    <><Loader2 size={16} className="animate-spin" /> Bağlanıyor...</>
+                                ) : (
+                                    'Bağlan'
+                                )}
+                            </button>
+                        )}
 
-                    <button
-                        type="button"
-                        className="btn-icon glass-button"
-                        onClick={handleCheckConnection}
-                        disabled={isChecking}
-                        title="Bağlantı durumunu kontrol et"
-                    >
-                        <RefreshCw size={18} className={isChecking ? 'animate-spin' : ''} />
-                    </button>
-                </div>
-            </form>
+                        <button
+                            type="button"
+                            className={`btn btn-ghost btn-icon ${settings.autoReconnect ? 'btn-icon-active' : ''}`}
+                            onClick={() => setSettings({ ...settings, autoReconnect: !settings.autoReconnect })}
+                            title={settings.autoReconnect ? 'Otomatik Bağlanma: AÇIK' : 'Otomatik Bağlanma: KAPALI'}
+                        >
+                            <Zap size={18} style={settings.autoReconnect ? { fill: 'white' } : {}} />
+                        </button>
+
+                        <button
+                            type="button"
+                            className="btn btn-ghost btn-icon"
+                            onClick={() => checkConnection(false)}
+                            disabled={isChecking}
+                            title="Bağlantı durumunu kontrol et"
+                        >
+                            <RefreshCw size={18} className={isChecking ? 'animate-spin' : ''} />
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     )
 }
