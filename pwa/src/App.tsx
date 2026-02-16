@@ -190,6 +190,20 @@ export function App() {
         }
     }, [settings.connectOnStartup])
 
+    useEffect(() => {
+        if (isAutoConnect) return
+        const handleVisibility = () => {
+            if (document.visibilityState !== 'visible') return
+            const s = useStore.getState()
+            if (!s.settings.connectOnFocus) return
+            if (s.status === 'connected' || s.status === 'connecting') return
+            if (!s.credentials.username || !s.credentials.password) return
+            s.performLogin()
+        }
+        document.addEventListener('visibilitychange', handleVisibility)
+        return () => document.removeEventListener('visibilitychange', handleVisibility)
+    }, [])
+
     const handleLogout = async () => {
         setIsLoggingOut(true)
         await performLogout()

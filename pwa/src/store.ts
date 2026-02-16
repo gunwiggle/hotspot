@@ -31,7 +31,7 @@ interface HotspotState {
 export const useStore = create<HotspotState>((set, get) => ({
     status: 'disconnected',
     credentials: { username: '', password: '' },
-    settings: { autoReconnect: true, privacyMode: false, connectOnStartup: false },
+    settings: { autoReconnect: true, privacyMode: false, connectOnStartup: false, connectOnFocus: true },
     errorMessage: null,
     isChecking: false,
     ping: null,

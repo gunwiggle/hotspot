@@ -10,12 +10,14 @@ export interface Settings {
     autoReconnect: boolean
     privacyMode: boolean
     connectOnStartup: boolean
+    connectOnFocus: boolean
 }
 
 const DEFAULT_SETTINGS: Settings = {
     autoReconnect: true,
     privacyMode: false,
     connectOnStartup: false,
+    connectOnFocus: true,
 }
 
 export function saveCredentials(creds: Credentials): void {

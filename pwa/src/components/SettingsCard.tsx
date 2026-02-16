@@ -1,4 +1,4 @@
-import { Shield, ShieldOff, Zap, ZapOff, Power, PowerOff, X } from 'lucide-react'
+import { Shield, ShieldOff, Zap, ZapOff, Power, PowerOff, Eye, EyeOff, X } from 'lucide-react'
 import { useStore } from '@/store'
 
 export function SettingsCard() {
@@ -20,6 +20,14 @@ export function SettingsCard() {
             onChange: () => setSettings({ ...settings, connectOnStartup: !settings.connectOnStartup }),
             iconOn: <Power size={18} color="#60a5fa" />,
             iconOff: <PowerOff size={18} color="#94a3b8" />,
+        },
+        {
+            label: 'Odakta Bağlan',
+            description: 'Uygulama ön plana geldiğinde otomatik olarak giriş yap',
+            value: settings.connectOnFocus,
+            onChange: () => setSettings({ ...settings, connectOnFocus: !settings.connectOnFocus }),
+            iconOn: <Eye size={18} color="#fbbf24" />,
+            iconOff: <EyeOff size={18} color="#94a3b8" />,
         },
         {
             label: 'Gizlilik Modu',
