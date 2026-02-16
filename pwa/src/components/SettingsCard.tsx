@@ -32,7 +32,7 @@ export function SettingsCard() {
     ]
 
     return (
-        <div className="safe-area" style={{ minHeight: '100dvh', background: '#030712', padding: '20px', paddingBottom: '32px' }}>
+        <div className="safe-area" style={{ minHeight: '100dvh', background: '#030712', paddingLeft: '20px', paddingRight: '20px', paddingBottom: '32px' }}>
             <div style={{ maxWidth: '480px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '8px' }}>
                     <div>

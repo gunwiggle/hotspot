@@ -94,7 +94,7 @@ export function App() {
     if (isSettingsOpen) return <SettingsCard />
 
     return (
-        <div className="safe-area" style={{ minHeight: '100dvh', padding: '20px', paddingBottom: '40px' }}>
+        <div className="safe-area" style={{ minHeight: '100dvh', paddingLeft: '20px', paddingRight: '20px', paddingBottom: '40px' }}>
             <div style={{ maxWidth: '480px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '8px', paddingBottom: '4px' }}>
                     <div>
