@@ -1,26 +1,41 @@
-const AUTH_URL = 'https://hotspot.maxxarena.de/logon'
-const LOGOUT_URL = 'https://hotspot.maxxarena.de/logoff'
+const BASE_URL = 'https://hotspot.maxxarena.de'
+const LOGIN_URL = `${BASE_URL}/?auth=ticket&pageID=page-0`
 const CONNECTIVITY_URL = 'https://connectivitycheck.gstatic.com/generate_204'
 
 export async function performLogin(username: string, password: string): Promise<boolean> {
     try {
-        const formData = new URLSearchParams()
-        formData.append('username', username)
-        formData.append('password', password)
+        await fetch(BASE_URL, {
+            method: 'GET',
+            mode: 'no-cors',
+            credentials: 'include',
+        })
+    } catch { }
 
-        const response = await fetch(AUTH_URL, {
+    try {
+        const formData = new URLSearchParams()
+        formData.append('auth', 'ticket')
+        formData.append('lp-screen-size', '390:844:390:844')
+        formData.append('lp-input-username', username)
+        formData.append('lp-input-password', password)
+        formData.append('submit-login', 'Oturum aç')
+
+        await fetch(LOGIN_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
             body: formData.toString(),
+            mode: 'no-cors',
+            credentials: 'include',
             redirect: 'follow',
         })
 
-        const text = await response.text()
-        return text.includes('Login successful') ||
-            text.includes('already logged') ||
-            text.includes('Erfolgreich') ||
-            response.ok
+        await new Promise(r => setTimeout(r, 1500))
+
+        const connected = await checkConnection()
+        return connected
     } catch {
+        await new Promise(r => setTimeout(r, 1000))
         const connected = await checkConnection()
         return connected
     }
@@ -28,11 +43,22 @@ export async function performLogin(username: string, password: string): Promise<
 
 export async function performLogout(): Promise<boolean> {
     try {
-        const response = await fetch(LOGOUT_URL, {
+        const formData = new URLSearchParams()
+        formData.append('logout', '1')
+
+        await fetch(BASE_URL + '/', {
             method: 'POST',
-            redirect: 'follow',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: formData.toString(),
+            mode: 'no-cors',
+            credentials: 'include',
         })
-        return response.ok
+
+        await new Promise(r => setTimeout(r, 1000))
+        const connected = await checkConnection()
+        return !connected
     } catch {
         return false
     }
@@ -60,8 +86,7 @@ export async function measurePing(): Promise<number | null> {
     try {
         const start = performance.now()
         await fetch(CONNECTIVITY_URL, { method: 'HEAD', mode: 'no-cors' })
-        const end = performance.now()
-        return Math.round(end - start)
+        return Math.round(performance.now() - start)
     } catch {
         return null
     }
