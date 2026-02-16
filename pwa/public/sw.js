@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hotspot-v1'
+const CACHE_NAME = 'hotspot-v2'
 const ASSETS = [
     '/hotspot/',
     '/hotspot/index.html',
