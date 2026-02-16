@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Wifi, WifiOff, Loader2, Settings } from 'lucide-react'
+import { Wifi, WifiOff, Loader2, Settings, Check, X } from 'lucide-react'
 import { useStore, type ConnectionStatus } from '@/store'
 import { LoginCard } from '@/components/LoginCard'
 import { StatusCard } from '@/components/StatusCard'
@@ -45,9 +45,114 @@ function StatusBadge({ status, isChecking }: { status: ConnectionStatus; isCheck
     )
 }
 
+function QuickConnect() {
+    const [phase, setPhase] = useState<'connecting' | 'success' | 'error'>('connecting')
+    const { init, performLogin, status } = useStore()
+    const didRun = useRef(false)
+
+    useEffect(() => {
+        if (didRun.current) return
+        didRun.current = true
+        init()
+        setTimeout(async () => {
+            const store = useStore.getState()
+            if (!store.credentials.username || !store.credentials.password) {
+                setPhase('error')
+                return
+            }
+            await store.performLogin()
+            const result = useStore.getState().status
+            setPhase(result === 'connected' ? 'success' : 'error')
+        }, 300)
+    }, [])
+
+    return (
+        <div className="safe-area" style={{
+            minHeight: '100dvh', display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center', gap: '24px',
+            paddingLeft: '40px', paddingRight: '40px', textAlign: 'center'
+        }}>
+            {phase === 'connecting' && (
+                <>
+                    <div style={{
+                        width: '80px', height: '80px', borderRadius: '50%',
+                        background: 'linear-gradient(135deg, rgba(59,130,246,0.15), rgba(59,130,246,0.05))',
+                        border: '1px solid rgba(59,130,246,0.2)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}>
+                        <Loader2 size={32} color="#60a5fa" className="animate-spin" />
+                    </div>
+                    <div>
+                        <p style={{ fontSize: '20px', fontWeight: 700 }}>Bağlanıyor...</p>
+                        <p style={{ fontSize: '14px', color: 'var(--color-muted-foreground)', marginTop: '8px' }}>Hotspot'a giriş yapılıyor</p>
+                    </div>
+                </>
+            )}
+
+            {phase === 'success' && (
+                <>
+                    <div style={{
+                        width: '80px', height: '80px', borderRadius: '50%',
+                        background: 'linear-gradient(135deg, rgba(34,197,94,0.2), rgba(34,197,94,0.05))',
+                        border: '1px solid rgba(34,197,94,0.3)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        boxShadow: '0 0 40px rgba(34,197,94,0.15)'
+                    }}>
+                        <Check size={36} color="#4ade80" strokeWidth={3} />
+                    </div>
+                    <div>
+                        <p style={{ fontSize: '20px', fontWeight: 700, color: '#4ade80' }}>Bağlantı Başarılı</p>
+                        <p style={{ fontSize: '14px', color: 'var(--color-muted-foreground)', marginTop: '8px' }}>İnternete erişim sağlandı</p>
+                    </div>
+                </>
+            )}
+
+            {phase === 'error' && (
+                <>
+                    <div style={{
+                        width: '80px', height: '80px', borderRadius: '50%',
+                        background: 'linear-gradient(135deg, rgba(239,68,68,0.2), rgba(239,68,68,0.05))',
+                        border: '1px solid rgba(239,68,68,0.3)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}>
+                        <X size={36} color="#f87171" strokeWidth={3} />
+                    </div>
+                    <div>
+                        <p style={{ fontSize: '20px', fontWeight: 700, color: '#f87171' }}>Bağlantı Başarısız</p>
+                        <p style={{ fontSize: '14px', color: 'var(--color-muted-foreground)', marginTop: '8px' }}>
+                            {!useStore.getState().credentials.username ? 'Kayıtlı giriş bilgisi yok' : 'Tekrar deneyin'}
+                        </p>
+                    </div>
+                    <button
+                        className="btn btn-primary"
+                        style={{ height: '48px', paddingLeft: '32px', paddingRight: '32px' }}
+                        onClick={() => {
+                            setPhase('connecting')
+                            setTimeout(async () => {
+                                await useStore.getState().performLogin()
+                                setPhase(useStore.getState().status === 'connected' ? 'success' : 'error')
+                            }, 300)
+                        }}
+                    >
+                        Tekrar Dene
+                    </button>
+                </>
+            )}
+
+            <a
+                href="/hotspot/"
+                style={{ fontSize: '13px', color: 'var(--color-muted-foreground)', marginTop: '16px', textDecoration: 'none' }}
+            >
+                Uygulamayı Aç →
+            </a>
+        </div>
+    )
+}
+
 export function App() {
     const [isLoggingOut, setIsLoggingOut] = useState(false)
     const hasInitRef = useRef(false)
+    const isAutoConnect = new URLSearchParams(window.location.search).has('auto')
     const {
         status,
         isChecking,
@@ -62,10 +167,9 @@ export function App() {
     } = useStore()
 
     useEffect(() => {
-        if (!hasInitRef.current) {
-            init()
-            hasInitRef.current = true
-        }
+        if (isAutoConnect || hasInitRef.current) return
+        hasInitRef.current = true
+        init()
 
         const connInterval = setInterval(() => checkConnection(true), 10000)
         const pingInterval = setInterval(() => {
@@ -79,6 +183,7 @@ export function App() {
     }, [])
 
     useEffect(() => {
+        if (isAutoConnect) return
         if (settings.connectOnStartup && status === 'disconnected' && hasInitRef.current) {
             const timer = setTimeout(() => performLogin(), 1000)
             return () => clearTimeout(timer)
@@ -91,6 +196,7 @@ export function App() {
         setIsLoggingOut(false)
     }
 
+    if (isAutoConnect) return <QuickConnect />
     if (isSettingsOpen) return <SettingsCard />
 
     return (
